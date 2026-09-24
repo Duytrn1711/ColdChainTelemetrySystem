@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Telemetry Detail | Cold Chain</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/tables.css">
+    <link rel="stylesheet" href="../css/app-enhanced.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><div class="brand-icon">❄️</div><div class="brand-text"><h1>Cold Chain</h1><span>TELEMETRY</span></div></div>
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item"><a href="../dashboard.html"><div class="nav-link-content"><span>Dashboard</span></div></a></li>
+                    <li class="nav-item"><a href="warehouses.html"><div class="nav-link-content"><span>Warehouses</span></div></a></li>
+                    <li class="nav-item"><a href="vehicles.html"><div class="nav-link-content"><span>Delivery Vehicles</span></div></a></li>
+                    <li class="nav-item active"><a href="devices.html"><div class="nav-link-content"><span>Devices</span></div></a></li>
+                    <li class="nav-item"><a href="reports.html"><div class="nav-link-content"><span>Telemetry Data</span></div></a></li>
+                    <li class="nav-item"><a href="alerts.html"><div class="nav-link-content"><span>Alerts</span></div></a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <div class="main-wrapper">
+            <header class="top-header">
+                <div class="header-left">
+                    <button type="button" class="btn btn-secondary" onclick="window.location.href='devices.html'">← Back to Devices</button>
+                </div>
+                <div class="header-right">
+                    <button type="button" class="btn btn-secondary" onclick="triggerDeviceCalibration()" style="font-size:12px;">🔬 Probe Calibration</button>
+                    <button type="button" class="btn btn-primary" onclick="exportDeviceCertificate()" style="font-size:12px;">📜 ISO 9001 Certificate</button>
+                    <span class="badge badge-active" id="detail-badge-status">ONLINE</span>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <div class="page-header-row">
+                    <div class="page-title-group">
+                        <h2 id="detail-dev-token">IoT Sensor Node</h2>
+                        <p id="detail-dev-assignment">Loading device telemetry profile...</p>
+                    </div>
+                </div>
+
+                <div class="stat-cards-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="stat-card">
+                        <div class="stat-card-title">CURRENT TEMPERATURE</div>
+                        <div class="stat-card-value" id="detail-temp-val">--°C</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">RELATIVE HUMIDITY</div>
+                        <div class="stat-card-value" id="detail-hum-val">--%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">BATTERY RESERVE</div>
+                        <div class="stat-card-value" style="color:#10b981;">94%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">RSSI SIGNAL</div>
+                        <div class="stat-card-value" style="color:#2563eb;">-74 dBm</div>
+                    </div>
+                </div>
+
+                <!-- Time-Series Thermal & Humidity Profile Chart -->
+                <div class="table-card" style="padding:20px;">
+                    <h3 style="font-size:16px; font-weight:700; margin-bottom:14px;">Time-Series Thermal &amp; Humidity Profile</h3>
+                    <div style="position:relative; width:100%; height:320px;">
+                        <canvas id="deviceDetailChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Raw Telemetry Records Table -->
+                <div class="table-card">
+                    <div class="table-card-header">
+                        <div class="table-card-title">Recent Raw Telemetry Records</div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>TEMPERATURE (°C)</th>
+                                    <th>HUMIDITY (%)</th>
+                                    <th>RECEIVED TIMESTAMP</th>
+                                    <th>STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detail-raw-tbody">
+                                <!-- Dynamic -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/app-enhanced.js"></script>
+    <script src="../js/device-detail.js"></script>
+</body>
+</html>
