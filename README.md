@@ -22,9 +22,9 @@ Hệ thống quản lý và giám sát chuỗi lạnh theo thời gian thực. �
 - Node.js
 - Express.js
 - PostgreSQL
-- `pg`
+- pg
 - JWT (`jsonwebtoken`)
-- `bcryptjs`
+- bcryptjs
 - CORS
 
 ### Frontend
