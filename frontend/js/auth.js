@@ -103,17 +103,22 @@ function initProtectedPage() {
         return;
     }
 
-    // Bind user profile info to sidebar
+    if (window.Roles) {
+        Roles.renderSidebar();
+        Roles.applyUi();
+    }
+
     const currentUser = api.getCurrentUser();
     const userNameEl = document.getElementById("sidebar-user-name");
     const userRoleEl = document.getElementById("sidebar-user-role");
+    const userAvatarEl = document.getElementById("sidebar-user-avatar");
 
     if (currentUser) {
         if (userNameEl) userNameEl.textContent = currentUser.full_name || currentUser.username;
-        if (userRoleEl) userRoleEl.textContent = currentUser.role === "ADMIN" ? "Administrator" : (currentUser.role || "User");
+        if (userRoleEl) userRoleEl.textContent = Roles ? Roles.label(currentUser.role) : (currentUser.role || "User");
+        if (userAvatarEl && Roles) userAvatarEl.textContent = Roles.initials(currentUser);
     }
 
-    // Bind logout button
     const logoutBtn = document.getElementById("sidebar-logout-btn");
     if (logoutBtn) {
         logoutBtn.addEventListener("click", (e) => {

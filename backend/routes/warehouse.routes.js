@@ -1,20 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const warehouseController = require("../controllers/warehouse.controller");
+const authController = require("../controllers/auth.controller");
+const { verifyToken, requireMinRole } = authController;
 
-// Lấy danh sách kho
 router.get("/", warehouseController.getAllWarehouses);
-
-// Lấy chi tiết kho
 router.get("/:id", warehouseController.getWarehouseById);
-
-// Thêm mới kho
-router.post("/", warehouseController.createWarehouse);
-
-// Cập nhật kho
-router.put("/:id", warehouseController.updateWarehouse);
-
-// Xóa kho
-router.delete("/:id", warehouseController.deleteWarehouse);
+router.post("/", verifyToken, requireMinRole("MANAGER"), warehouseController.createWarehouse);
+router.put("/:id", verifyToken, requireMinRole("MANAGER"), warehouseController.updateWarehouse);
+router.delete("/:id", verifyToken, requireMinRole("ADMIN"), warehouseController.deleteWarehouse);
 
 module.exports = router;

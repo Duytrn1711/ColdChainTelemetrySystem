@@ -225,6 +225,7 @@ function initVehicleFilters() {
 }
 
 function exportVehicleTelemetry() {
+    if (window.Roles && !Roles.guard("export", "Staff accounts cannot export telemetry logs.")) return;
     showToast("Exporting fleet telemetry log to CSV...", "info");
     const headers = ["Vehicle ID", "License Plate", "Depot", "Status", "Current Temp", "Device Node"];
     const rows = allVehicles.map(v => [
@@ -314,6 +315,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.openAddVehicleModal = function() {
+    if (window.Roles && !Roles.guard("write", "Staff accounts can view fleet data only.")) return;
     const modal = document.getElementById("add-vehicle-modal");
     if (modal) {
         const form = document.getElementById("add-vehicle-form");
@@ -328,6 +330,7 @@ window.closeAddVehicleModal = function() {
 };
 
 window.openEditVehicleModal = function(id) {
+    if (window.Roles && !Roles.guard("write", "Staff accounts cannot edit vehicles.")) return;
     const veh = allVehicles.find(v => v.id == id);
     if (!veh) {
         showToast("Please select a vehicle to edit", "warning");
@@ -351,6 +354,7 @@ window.closeEditVehicleModal = function() {
 };
 
 window.confirmDeleteVehicle = async function(id) {
+    if (window.Roles && !Roles.guard("delete", "Only administrators can delete fleet vehicles.")) return;
     const veh = allVehicles.find(v => v.id == id);
     const plate = veh ? veh.license_plate : `#${id}`;
 

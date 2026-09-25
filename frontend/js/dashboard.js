@@ -3,6 +3,30 @@
  */
 
 let mainTelemetryChart = null;
+let lastChartPoints = [];
+let currentChartFilter = "all";
+
+const CHART_LABELS = ["00:00", "02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"];
+
+const TRANSIT_TEMPS = [4.2, 4.4, 1.8, 4.9, 5.2, 10.8, 4.5, 4.7, 5.1, 4.6, 4.3, 4.4];
+const HANOI_HUB_TEMPS = [4.1, 4.0, 4.2, 3.9, 4.3, 4.4, 4.1, 4.0, 4.2, 4.3, 4.1, 4.0];
+const HAIPHONG_HUB_TEMPS = [3.8, 3.9, 4.0, 4.2, 5.4, 6.1, 4.8, 4.3, 4.1, 4.0, 3.9, 4.0];
+const DANANG_HUB_TEMPS = [4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 4.2, 4.5, 4.8, 4.6, 4.4];
+
+const SAFE_BAND_PLUGIN = {
+    id: "safeBand",
+    beforeDatasetsDraw(chart) {
+        const yScale = chart.scales.y;
+        const { ctx, chartArea } = chart;
+        if (!chartArea || !yScale) return;
+        const y8 = yScale.getPixelForValue(8);
+        const y2 = yScale.getPixelForValue(2);
+        ctx.save();
+        ctx.fillStyle = "rgba(37, 99, 235, 0.08)";
+        ctx.fillRect(chartArea.left, y8, chartArea.right - chartArea.left, y2 - y8);
+        ctx.restore();
+    }
+};
 
 document.addEventListener("DOMContentLoaded", async () => {
     await loadDashboardSummary();
@@ -43,17 +67,124 @@ async function loadDashboardSummary() {
             const compEl = document.getElementById("stat-compliance-rate");
             if (compEl) compEl.textContent = `${data.compliance.rate || 96.4}%`;
 
-            // Render Main Chart
-            renderTelemetryChart(data.chartPoints);
+            lastChartPoints = data.chartPoints || [];
+            renderTelemetryChart(lastChartPoints, currentChartFilter);
         }
     } catch (error) {
         console.error("Failed to load dashboard summary:", error);
-        // Fallback default chart
-        renderTelemetryChart([]);
+        lastChartPoints = [];
+        renderTelemetryChart([], currentChartFilter);
     }
 }
 
-function renderTelemetryChart(points) {
+function avgTemp(series) {
+    if (!series.length) return 0;
+    const sum = series.reduce((acc, val) => acc + Number(val || 0), 0);
+    return (sum / series.length).toFixed(1);
+}
+
+function mapApiSeries(points, length) {
+    if (!points || !points.length) return null;
+    const temps = points
+        .map((p) => parseFloat(p.temperature))
+        .filter((n) => Number.isFinite(n));
+    if (!temps.length) return null;
+    const mapped = [];
+    for (let i = 0; i < length; i++) {
+        const idx = Math.round(i * (temps.length - 1) / Math.max(length - 1, 1));
+        mapped.push(Number(temps[idx].toFixed(1)));
+    }
+    return mapped;
+}
+
+function lineDataset(label, data, color, options = {}) {
+    return {
+        label,
+        data,
+        borderColor: color,
+        backgroundColor: options.fillColor || "transparent",
+        borderWidth: options.borderWidth || 2.4,
+        borderDash: options.dashed ? [6, 4] : [],
+        tension: 0.35,
+        fill: Boolean(options.fill),
+        pointBackgroundColor: (context) => {
+            const val = context.raw;
+            if (val > 8.0) return "#ef4444";
+            if (val < 2.0) return "#f59e0b";
+            return color;
+        },
+        pointBorderColor: "#ffffff",
+        pointBorderWidth: 2,
+        pointRadius: (context) => {
+            const val = context.raw;
+            return val > 8.0 || val < 2.0 ? 6 : 3.5;
+        },
+        pointHoverRadius: 7,
+        hidden: Boolean(options.hidden)
+    };
+}
+
+function updateChartChrome(filterType, transitSeries, hubSeries) {
+    const subtitle = document.getElementById("chart-subtitle");
+    const legend = document.getElementById("chart-legend-row");
+    if (filterType === "warehouses") {
+        if (subtitle) {
+            subtitle.textContent = "Live chamber temperatures from Hanoi, Hai Phong, and Da Nang cold-storage hubs";
+        }
+        if (legend) {
+            legend.innerHTML = `
+                <div class="legend-item">
+                    <span class="legend-color-bar" style="background:#0ea5e9;"></span>
+                    <span>Hanoi Central Hub (Avg ${avgTemp(hubSeries.hanoi)}°C)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color-bar" style="background:#10b981;"></span>
+                    <span>Hai Phong Port Hub (Avg ${avgTemp(hubSeries.haiphong)}°C)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color-bar" style="background:#8b5cf6;"></span>
+                    <span>Da Nang Cold Depot (Avg ${avgTemp(hubSeries.danang)}°C)</span>
+                </div>
+            `;
+        }
+        return;
+    }
+    if (filterType === "vehicles") {
+        if (subtitle) {
+            subtitle.textContent = "Aggregate reefer temperature across active delivery vehicles in transit";
+        }
+        if (legend) {
+            legend.innerHTML = `
+                <div class="legend-item">
+                    <span class="legend-color-bar" style="background:#2563eb;"></span>
+                    <span>Primary Transit Fleet (Avg ${avgTemp(transitSeries)}°C)</span>
+                </div>
+            `;
+        }
+        return;
+    }
+    if (subtitle) {
+        subtitle.textContent = "Continuous real-time aggregate tracking across 14 calibrated IoT temperature probes";
+    }
+    if (legend) {
+        legend.innerHTML = `
+            <div class="legend-item">
+                <span class="legend-color-bar" style="background:#2563eb;"></span>
+                <span>Primary Transit Fleet (Avg ${avgTemp(transitSeries)}°C)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color-bar" style="background:#0ea5e9;"></span>
+                <span>Hanoi Central Hub (Avg ${avgTemp(hubSeries.hanoi)}°C)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color-bar" style="background:#10b981;"></span>
+                <span>Hai Phong Port Hub (Avg ${avgTemp(hubSeries.haiphong)}°C)</span>
+            </div>
+        `;
+    }
+}
+
+function renderTelemetryChart(points, filterType = "all") {
     const ctx = document.getElementById("telemetryMainChart");
     if (!ctx) return;
 
@@ -61,49 +192,44 @@ function renderTelemetryChart(points) {
         mainTelemetryChart.destroy();
     }
 
-    // Prepare time labels and curves matching design reference
-    const labels = ["00:00", "02:00", "04:00", "06:00", "08:00", "10:42", "12:00"];
-    const transitTemps = [4.2, 4.4, 1.8, 4.9, 5.2, 10.8, 4.5];
-    const hubTemps = [4.0, 4.1, 4.0, 4.1, 4.2, 4.3, 4.1];
+    const apiTransit = mapApiSeries(points, CHART_LABELS.length);
+    const transitTemps = apiTransit || TRANSIT_TEMPS;
+    const hubSeries = {
+        hanoi: HANOI_HUB_TEMPS,
+        haiphong: HAIPHONG_HUB_TEMPS,
+        danang: DANANG_HUB_TEMPS
+    };
+
+    const showVehicles = filterType !== "warehouses";
+    const showHubs = filterType !== "vehicles";
+
+    updateChartChrome(filterType, transitTemps, hubSeries);
+
+    const datasets = [];
+    if (showVehicles) {
+        datasets.push(lineDataset("Primary Transit Fleet", transitTemps, "#2563eb", {
+            fill: filterType === "vehicles",
+            fillColor: "rgba(37, 99, 235, 0.12)",
+            borderWidth: 2.6
+        }));
+    }
+    if (showHubs) {
+        datasets.push(lineDataset("Hanoi Central Hub", hubSeries.hanoi, "#0ea5e9", {
+            fill: filterType === "warehouses",
+            fillColor: "rgba(14, 165, 233, 0.12)"
+        }));
+        datasets.push(lineDataset("Hai Phong Port Hub", hubSeries.haiphong, "#10b981", {
+            fill: filterType === "warehouses",
+            fillColor: "rgba(16, 185, 129, 0.10)"
+        }));
+        datasets.push(lineDataset("Da Nang Cold Depot", hubSeries.danang, "#8b5cf6"));
+    }
 
     mainTelemetryChart = new Chart(ctx, {
         type: "line",
         data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: "Primary Transit Fleet",
-                    data: transitTemps,
-                    borderColor: "#2563eb",
-                    backgroundColor: "rgba(37, 99, 235, 0.04)",
-                    borderWidth: 2.5,
-                    tension: 0.4,
-                    fill: false,
-                    pointBackgroundColor: (context) => {
-                        const val = context.raw;
-                        if (val > 8.0) return "#ef4444";
-                        if (val < 2.0) return "#f59e0b";
-                        return "#2563eb";
-                    },
-                    pointBorderColor: "#ffffff",
-                    pointBorderWidth: 2,
-                    pointRadius: (context) => {
-                        const val = context.raw;
-                        return val > 8.0 || val < 2.0 ? 7 : 4;
-                    },
-                    pointHoverRadius: 8
-                },
-                {
-                    label: "Static Hub Baseline",
-                    data: hubTemps,
-                    borderColor: "#94a3b8",
-                    borderWidth: 1.8,
-                    borderDash: [5, 5],
-                    tension: 0.3,
-                    fill: false,
-                    pointRadius: 0
-                }
-            ]
+            labels: CHART_LABELS,
+            datasets
         },
         options: {
             responsive: true,
@@ -114,6 +240,7 @@ function renderTelemetryChart(points) {
             },
             plugins: {
                 legend: { display: false },
+                safeBand: true,
                 tooltip: {
                     backgroundColor: "#0f172a",
                     titleColor: "#94a3b8",
@@ -167,7 +294,8 @@ function renderTelemetryChart(points) {
                     }
                 }
             }
-        }
+        },
+        plugins: [SAFE_BAND_PLUGIN]
     });
 }
 
@@ -177,21 +305,8 @@ function initChartFilters() {
         btn.addEventListener("click", () => {
             filterButtons.forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
-
-            const filterType = btn.getAttribute("data-filter");
-            if (!mainTelemetryChart) return;
-
-            if (filterType === "vehicles") {
-                mainTelemetryChart.data.datasets[0].hidden = false;
-                mainTelemetryChart.data.datasets[1].hidden = true;
-            } else if (filterType === "warehouses") {
-                mainTelemetryChart.data.datasets[0].hidden = true;
-                mainTelemetryChart.data.datasets[1].hidden = false;
-            } else {
-                mainTelemetryChart.data.datasets[0].hidden = false;
-                mainTelemetryChart.data.datasets[1].hidden = false;
-            }
-            mainTelemetryChart.update();
+            currentChartFilter = btn.getAttribute("data-filter") || "all";
+            renderTelemetryChart(lastChartPoints, currentChartFilter);
         });
     });
 }
@@ -277,6 +392,7 @@ async function loadRecentAlerts() {
 
 // Export system telemetry logs to standard CSV format
 window.exportSystemTelemetryLog = async function() {
+    if (window.Roles && !Roles.guard("export", "Staff accounts cannot export system logs.")) return;
     showToast("Generating system-wide telemetry CSV dataset...", "info");
     try {
         const res = await api.get("/data", { limit: 100 });
@@ -328,14 +444,16 @@ window.onTelemetryLiveUpdate = function(packet) {
     if (!mainTelemetryChart) return;
     const temp = parseFloat(packet.temperature);
     
-    // Append new data point to main telemetry chart
-    const nowTime = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    if (mainTelemetryChart.data.labels.length > 8) {
-        mainTelemetryChart.data.labels.shift();
-        mainTelemetryChart.data.datasets[0].data.shift();
-    }
+    const nowTime = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
     mainTelemetryChart.data.labels.push(nowTime);
-    mainTelemetryChart.data.datasets[0].data.push(temp);
+    mainTelemetryChart.data.datasets.forEach((dataset, idx) => {
+        const nextVal = idx === 0 ? temp : Number((dataset.data[dataset.data.length - 1] + (Math.random() - 0.5) * 0.3).toFixed(1));
+        dataset.data.push(nextVal);
+        if (dataset.data.length > 12) dataset.data.shift();
+    });
+    if (mainTelemetryChart.data.labels.length > 12) {
+        mainTelemetryChart.data.labels.shift();
+    }
     mainTelemetryChart.update("none");
 
     // If an alert was generated, prepend a row to the recent alerts table

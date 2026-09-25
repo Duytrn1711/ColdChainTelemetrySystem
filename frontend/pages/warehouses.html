@@ -329,10 +329,10 @@
                     </div>
 
                     <div class="page-actions-group">
-                        <button type="button" class="btn btn-secondary" onclick="exportWarehouseList()">
+                        <button type="button" class="btn btn-secondary" onclick="exportWarehouseList()" data-role="export">
                             📊 Export Facility Data
                         </button>
-                        <button type="button" class="btn btn-primary" id="btn-open-add-modal">
+                        <button type="button" class="btn btn-primary" id="btn-open-add-modal" data-role="write">
                             <span>+ Add New Warehouse</span>
                         </button>
                     </div>
@@ -471,10 +471,10 @@
                                 <p id="panel-wh-sub">Gia Lam Logistics Park, Hanoi Hub</p>
                             </div>
                             <div style="display:flex; gap:8px;">
-                                <button type="button" class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" title="Edit Facility" onclick="openEditWarehouseModal(selectedWarehouseId)">
+                                <button type="button" class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" title="Edit Facility" onclick="openEditWarehouseModal(selectedWarehouseId)" data-role="write">
                                     ✏️ Edit
                                 </button>
-                                <button type="button" class="btn btn-danger" style="padding:6px 10px; font-size:12px;" title="Delete Facility" onclick="confirmDeleteWarehouse(selectedWarehouseId)">
+                                <button type="button" class="btn btn-danger" style="padding:6px 10px; font-size:12px;" title="Delete Facility" onclick="confirmDeleteWarehouse(selectedWarehouseId)" data-role="delete">
                                     🗑️ Delete
                                 </button>
                             </div>
@@ -668,6 +668,7 @@
 
     <!-- Scripts -->
     <script src="../js/api.js"></script>
+    <script src="../js/roles.js"></script>
     <script src="../js/auth.js"></script>
     <script src="../js/app-enhanced.js"></script>
     <script src="../js/warehouses.js"></script>

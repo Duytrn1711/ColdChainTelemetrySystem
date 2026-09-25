@@ -106,12 +106,14 @@ function renderWarehousesTable(list) {
                         <button type="button" class="btn-table-action ${isSelected ? 'active' : ''}" onclick="event.stopPropagation(); window.location.href='warehouses-detail.html?id=${wh.id}'" title="View Facility Probes & Fleet">
                             Details
                         </button>
+                        ${window.Roles && Roles.can("write") ? `
                         <button type="button" class="btn-table-action" onclick="event.stopPropagation(); openEditWarehouseModal(${wh.id})" title="Edit Facility" style="padding:4px 8px;">
                             ✏️
-                        </button>
+                        </button>` : ""}
+                        ${window.Roles && Roles.can("delete") ? `
                         <button type="button" class="btn-table-action" onclick="event.stopPropagation(); confirmDeleteWarehouse(${wh.id})" title="Delete Facility" style="padding:4px 8px; color:#ef4444;">
                             🗑️
-                        </button>
+                        </button>` : ""}
                     </div>
                 </td>
             </tr>
@@ -390,6 +392,7 @@ function initModal() {
 
 // Edit Warehouse handlers
 window.openEditWarehouseModal = function(id) {
+    if (window.Roles && !Roles.guard("write", "Staff accounts cannot edit warehouses.")) return;
     const wh = allWarehouses.find(w => w.id == id);
     if (!wh) return;
 
@@ -443,6 +446,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.confirmDeleteWarehouse = async function(id) {
+    if (window.Roles && !Roles.guard("delete", "Only administrators can delete warehouses.")) return;
     const wh = allWarehouses.find(w => w.id == id);
     const name = wh ? wh.warehouse_name : `#${id}`;
     if (!confirm(`Are you sure you want to delete warehouse "${name}"? This action cannot be undone.`)) {
@@ -479,6 +483,7 @@ window.triggerGpsForSelectedWh = function() {
 };
 
 function exportWarehouseList() {
+    if (window.Roles && !Roles.guard("export", "Staff accounts cannot export facility data.")) return;
     showToast("Exporting cold storage facility data...", "info");
     const headers = ["Facility ID", "Warehouse Name", "Latitude", "Longitude", "Status", "Sensors", "Docked Fleet"];
     const rows = allWarehouses.map(w => [

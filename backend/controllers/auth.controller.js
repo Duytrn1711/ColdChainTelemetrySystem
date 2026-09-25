@@ -162,6 +162,24 @@ exports.verifyToken = (req, res, next) => {
     }
 };
 
+const ROLE_RANK = { STAFF: 1, USER: 1, OPERATOR: 1, MANAGER: 2, ADMIN: 3 };
+
+exports.requireMinRole = (minRole) => {
+    return (req, res, next) => {
+        const raw = String((req.user && req.user.role) || "STAFF").toUpperCase();
+        const userRank = ROLE_RANK[raw] || 1;
+        const needed = ROLE_RANK[String(minRole).toUpperCase()] || 3;
+        if (userRank < needed) {
+            return res.status(403).json({
+                success: false,
+                data: null,
+                message: "Tài khoản của bạn không đủ quyền thực hiện thao tác này"
+            });
+        }
+        next();
+    };
+};
+
 // PUT /api/auth/change-password
 exports.changePassword = async (req, res) => {
     try {

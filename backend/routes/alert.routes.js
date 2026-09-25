@@ -1,17 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const alertController = require("../controllers/alert.controller");
+const authController = require("../controllers/auth.controller");
+const { verifyToken, requireMinRole } = authController;
 
-// Lấy danh sách cảnh báo
 router.get("/", alertController.getAllAlerts);
-
-// Lấy chi tiết cảnh báo
 router.get("/:id", alertController.getAlertById);
-
-// Tạo mới cảnh báo
-router.post("/", alertController.createAlert);
-
-// Xử lý / xóa cảnh báo
-router.delete("/:id", alertController.deleteAlert);
+router.post("/", verifyToken, requireMinRole("MANAGER"), alertController.createAlert);
+router.delete("/:id", verifyToken, requireMinRole("MANAGER"), alertController.deleteAlert);
 
 module.exports = router;

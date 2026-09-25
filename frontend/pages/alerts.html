@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -69,10 +69,61 @@
         }
         .row-selected {
             background-color: #eff6ff !important;
-            border-left: 3px solid #2563eb !important;
+            border-left: 4px solid #2563eb !important;
+        }
+        .row-selected td {
+            color: #1e3a8a;
+        }
+        #alerts-queue-tbody tr {
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
         }
         #alerts-queue-tbody tr:hover {
             background-color: #f1f5f9;
+        }
+        .incident-panel {
+            transition: border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+        @keyframes panelPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
+                border-color: #2563eb;
+            }
+            70% {
+                box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
+            }
+            100% {
+                box-shadow: var(--shadow-sm);
+            }
+        }
+        .panel-highlight-anim {
+            animation: panelPulse 0.6s ease-out;
+        }
+        .btn-table-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-table-action:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+        .btn-table-action.btn-inspect {
+            background: #eff6ff;
+            color: #2563eb;
+            border-color: #bfdbfe;
+        }
+        .btn-table-action.btn-inspect:hover {
+            background: #dbeafe;
         }
     </style>
 </head>
@@ -238,13 +289,13 @@
                     </div>
 
                     <div class="page-actions-group">
-                        <button type="button" class="btn btn-secondary" onclick="openSettingsModal()">
+                        <button type="button" class="btn btn-secondary" onclick="openSettingsModal()" data-role="settings">
                             ⚙️ Safe Thresholds (2°C - 8°C)
                         </button>
-                        <button type="button" class="btn btn-danger" onclick="triggerSimulatedAlarm()" style="font-weight:700;">
+                        <button type="button" class="btn btn-danger" onclick="triggerSimulatedAlarm()" style="font-weight:700;" data-role="simulate">
                             🚨 Trigger Test Excursion
                         </button>
-                        <button type="button" class="btn btn-primary" onclick="markAllAcknowledged()">
+                        <button type="button" class="btn btn-primary" onclick="markAllAcknowledged()" data-role="acknowledge">
                             ✓ Acknowledge All
                         </button>
                     </div>
@@ -312,6 +363,7 @@
                                         <th>ALERT TYPE</th>
                                         <th>TRIGGERED VALUE</th>
                                         <th>TIMESTAMP</th>
+                                        <th>ACTION</th>
                                     </tr>
                                 </thead>
                                 <tbody id="alerts-queue-tbody">
@@ -335,19 +387,19 @@
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
                             <div>
                                 <div style="display:flex; align-items:center; gap:8px;">
-                                    <span style="color:#ef4444; font-size:18px;">🛑</span>
+                                    <span style="font-size:18px;" id="inc-detail-icon">🛑</span>
                                     <h3 style="font-size:18px; font-weight:800;" id="inc-detail-id">Incident Details: ALT-4091</h3>
                                 </div>
                                 <p style="font-size:12px; color:#64748b; margin-top:2px;">Cold Chain Priority Incident Triage</p>
                             </div>
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <span class="badge badge-critical" id="inc-detail-badge">CRITICAL</span>
-                                <button type="button" class="header-action-btn" title="Close Panel" onclick="showToast('Incident panel active', 'info')">&times;</button>
+                                <button type="button" class="header-action-btn" title="Refresh Current Alert" onclick="if(currentSelectedIncident) selectIncidentObject(currentSelectedIncident)">🔄</button>
                             </div>
                         </div>
 
                         <!-- Breach Metric Card -->
-                        <div style="background:#fff1f2; border:1px solid #fecaca; border-radius:8px; padding:16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+                        <div id="inc-metric-card" style="background:#fff1f2; border:1px solid #fecaca; border-radius:8px; padding:16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; transition: all 0.25s ease;">
                             <div>
                                 <div style="font-size:10px; font-weight:700; color:#991b1b; text-transform:uppercase;" id="inc-metric-name">BREACH METRIC</div>
                                 <div style="font-size:15px; font-weight:800; color:#b91c1c; margin:2px 0;" id="inc-metric-title">Temperature Excursion High</div>
@@ -355,14 +407,14 @@
                             </div>
                             <div style="text-align:right;">
                                 <div style="font-size:28px; font-weight:900; color:#ef4444;" id="inc-breach-temp">10.8°C</div>
-                                <div style="font-size:11px; color:#64748b;">Target Range: 2.0°C - 8.0°C</div>
+                                <div style="font-size:11px; color:#64748b;" id="inc-metric-range">Target Range: 2.0°C - 8.0°C</div>
                             </div>
                         </div>
 
                         <!-- Breach Progression (Last 15 Mins) Chart -->
                         <div style="margin-bottom:16px;">
                             <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px;">
-                                <strong style="color:#0f172a;">Breach Progression (Last 15 Mins)</strong>
+                                <strong style="color:#0f172a;" id="inc-chart-heading">Incident Progression (Recent Telemetry)</strong>
                                 <span style="color:#ef4444; font-weight:600;" id="inc-chart-status-desc">+2.8°C Over Max Threshold</span>
                             </div>
                             <div style="position:relative; width:100%; height:130px;">
@@ -424,14 +476,14 @@
 
                         <!-- Actions -->
                         <div style="display:flex; flex-direction:column; gap:10px;">
-                            <button type="button" class="btn btn-primary" style="width:100%; height:42px;" onclick="acknowledgeAlert()">
+                            <button type="button" class="btn btn-primary" style="width:100%; height:42px;" onclick="acknowledgeAlert()" data-role="acknowledge">
                                 ✓ Acknowledge Alert
                             </button>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                                <button type="button" class="btn btn-secondary" onclick="window.location.href='reports.html'">
+                                <button type="button" class="btn btn-secondary" onclick="viewLiveTelemetry()">
                                     📈 Live Telemetry
                                 </button>
-                                <button type="button" class="btn btn-danger" onclick="openMaintenanceDispatchModal()">
+                                <button type="button" class="btn btn-danger" onclick="openMaintenanceDispatchModal()" data-role="resolveAlert">
                                     🚨 Maintenance Dispatch
                                 </button>
                             </div>
@@ -485,6 +537,7 @@
 
     <!-- Scripts -->
     <script src="../js/api.js"></script>
+    <script src="../js/roles.js"></script>
     <script src="../js/auth.js"></script>
     <script src="../js/app-enhanced.js"></script>
     <script src="../js/alerts.js"></script>

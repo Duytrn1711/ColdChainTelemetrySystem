@@ -1,20 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const vehicleController = require("../controllers/vehicle.controller");
+const authController = require("../controllers/auth.controller");
+const { verifyToken, requireMinRole } = authController;
 
-// Lấy danh sách xe tải lạnh
 router.get("/", vehicleController.getAllVehicles);
-
-// Lấy chi tiết một xe tải
 router.get("/:id", vehicleController.getVehicleById);
-
-// Thêm mới xe tải
-router.post("/", vehicleController.createVehicle);
-
-// Sửa thông tin xe tải
-router.put("/:id", vehicleController.updateVehicle);
-
-// Xóa xe tải
-router.delete("/:id", vehicleController.deleteVehicle);
+router.post("/", verifyToken, requireMinRole("MANAGER"), vehicleController.createVehicle);
+router.put("/:id", verifyToken, requireMinRole("MANAGER"), vehicleController.updateVehicle);
+router.delete("/:id", verifyToken, requireMinRole("ADMIN"), vehicleController.deleteVehicle);
 
 module.exports = router;

@@ -247,6 +247,10 @@ function initHeaderLiveControls() {
     const headerLeft = document.querySelector(".top-header .header-left");
     if (!headerLeft) return;
 
+    if (window.Roles && !Roles.can("simulate")) {
+        return;
+    }
+
     if (!document.getElementById("btn-toggle-live-stream")) {
         const liveWrapper = document.createElement("div");
         liveWrapper.style.display = "flex";
@@ -387,13 +391,13 @@ function initProfileDropdown() {
     menu.innerHTML = `
         <div class="dropdown-header">
             <div class="dropdown-user-name">${user.full_name || user.username}</div>
-            <div class="dropdown-user-role">${user.role === 'ADMIN' ? '👑 Administrator' : '📦 Cold Chain Operator'}</div>
+            <div class="dropdown-user-role">${Roles ? Roles.label(user.role) : user.role}</div>
             <div style="font-size:11px; color:#64748b; margin-top:2px;">@${user.username} · coldchain.internal</div>
         </div>
         <button type="button" class="dropdown-item" onclick="openCommandPalette(); closeMenus();">
             <span>🔍</span> <span>Quick Command (Ctrl+K)</span>
         </button>
-        <button type="button" class="dropdown-item" onclick="openSettingsModal(); closeMenus();">
+        <button type="button" class="dropdown-item" onclick="openSettingsModal(); closeMenus();" ${window.Roles && !Roles.can("settings") ? "hidden" : ""}>
             <span>⚙️</span> <span>System Thresholds</span>
         </button>
         <button type="button" class="dropdown-item" onclick="openChangePwdModal(); closeMenus();">
@@ -561,12 +565,11 @@ const COMMAND_ACTIONS = [
     { name: "IoT Sensor Devices & Nodes", category: "NAVIGATION", icon: "📡", action: () => navigateToPage("devices") },
     { name: "Telemetry Data & Raw Streams", category: "NAVIGATION", icon: "📈", action: () => navigateToPage("reports") },
     { name: "Incident & Excursion Alerts", category: "NAVIGATION", icon: "🛑", action: () => navigateToPage("alerts") },
-    
-    { name: "Simulate Real-time IoT Packet (Ping Test)", category: "QUICK ACTIONS", icon: "⚡", action: () => { triggerTelemetryPing(false); showToast("Dispatched simulated IoT telemetry packet!", "success"); } },
-    { name: "Trigger Critical Excursion Test (High Temp)", category: "QUICK ACTIONS", icon: "🚨", action: () => { triggerTelemetryPing(true); } },
-    { name: "Toggle Live IoT Telemetry Stream", category: "QUICK ACTIONS", icon: "🔴", action: () => { isSimulationActive = !isSimulationActive; updateSimulationState(); } },
-    { name: "Generate WHO & ISO 9001 Compliance Certificate (PDF)", category: "REPORTS", icon: "🛡️", action: () => generateAuditCertificate() },
-    { name: "Configure Safe Temperature Thresholds", category: "SYSTEM", icon: "⚙️", action: () => openSettingsModal() },
+    { name: "Simulate Real-time IoT Packet (Ping Test)", category: "QUICK ACTIONS", icon: "⚡", need: "simulate", action: () => { triggerTelemetryPing(false); showToast("Dispatched simulated IoT telemetry packet!", "success"); } },
+    { name: "Trigger Critical Excursion Test (High Temp)", category: "QUICK ACTIONS", icon: "🚨", need: "simulate", action: () => { triggerTelemetryPing(true); } },
+    { name: "Toggle Live IoT Telemetry Stream", category: "QUICK ACTIONS", icon: "🔴", need: "simulate", action: () => { isSimulationActive = !isSimulationActive; updateSimulationState(); } },
+    { name: "Generate WHO & ISO 9001 Compliance Certificate (PDF)", category: "REPORTS", icon: "🛡️", need: "export", action: () => generateAuditCertificate() },
+    { name: "Configure Safe Temperature Thresholds", category: "SYSTEM", icon: "⚙️", need: "settings", action: () => openSettingsModal() },
     { name: "Change User Password", category: "ACCOUNT", icon: "🔑", action: () => openChangePwdModal() }
 ];
 
@@ -590,9 +593,10 @@ function renderCommandPaletteResults(query) {
     const results = document.getElementById("cmd-palette-results");
     if (!results) return;
 
-    const filtered = COMMAND_ACTIONS.filter(item => 
-        !query || item.name.toLowerCase().includes(query) || item.category.toLowerCase().includes(query)
-    );
+    const filtered = COMMAND_ACTIONS.filter(item => {
+        if (item.need && window.Roles && !Roles.can(item.need)) return false;
+        return !query || item.name.toLowerCase().includes(query) || item.category.toLowerCase().includes(query);
+    });
 
     if (filtered.length === 0) {
         results.innerHTML = `<div style="padding:30px; text-align:center; color:#94a3b8; font-size:13px;">No commands matching "${query}"</div>`;
@@ -671,6 +675,7 @@ function initSettingsModal() {
 }
 
 window.openSettingsModal = function() {
+    if (window.Roles && !Roles.guard("settings", "Only administrators can change system thresholds.")) return;
     const modal = document.getElementById("system-settings-modal");
     if (!modal) return;
     document.getElementById("cfg-temp-min").value = localStorage.getItem("cfg_temp_min") || "2.0";

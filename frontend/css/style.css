@@ -154,6 +154,18 @@ a {
     gap: 12px;
 }
 
+.nav-link-content svg,
+.brand-icon svg,
+.logout-btn svg {
+    flex-shrink: 0;
+    stroke: currentColor;
+}
+
+.role-hidden,
+[data-role][hidden] {
+    display: none !important;
+}
+
 .nav-item a:hover {
     background-color: rgba(255, 255, 255, 0.06);
     color: #ffffff;

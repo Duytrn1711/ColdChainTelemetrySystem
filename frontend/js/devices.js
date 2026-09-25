@@ -79,12 +79,14 @@ function renderDevicesTable(list) {
                         <button type="button" class="btn-table-action" onclick="window.location.href='devices-detail.html?id=${dev.id}'" title="Device details">
                             Details
                         </button>
+                        ${window.Roles && Roles.can("write") ? `
                         <button type="button" class="btn-table-action" onclick="openEditDeviceModal(${dev.id})" title="Edit device" style="padding:4px 8px;">
                             ✏️
-                        </button>
+                        </button>` : ""}
+                        ${window.Roles && Roles.can("delete") ? `
                         <button type="button" class="btn-table-action" onclick="confirmDeleteDevice(${dev.id})" title="Delete device" style="padding:4px 8px; color:#ef4444;">
                             🗑️
-                        </button>
+                        </button>` : ""}
                     </div>
                 </td>
             </tr>
@@ -232,6 +234,10 @@ function initDeviceFilters() {
 }
 
 function initRegisterModal() {
+    if (window.Roles && !Roles.can("write")) {
+        const openBtnEarly = document.getElementById("btn-open-register-modal");
+        if (openBtnEarly) openBtnEarly.classList.add("role-hidden");
+    }
     const modal = document.getElementById("register-device-modal");
     const openBtn = document.getElementById("btn-open-register-modal");
     const closeBtn = document.getElementById("reg-modal-close");
@@ -317,6 +323,7 @@ function initRegisterModal() {
 }
 
 window.openEditDeviceModal = function(id) {
+    if (window.Roles && !Roles.guard("write", "Staff accounts cannot edit devices.")) return;
     const dev = allDevices.find(d => d.id == id);
     if (!dev) {
         showToast("Device information not found", "warning");
@@ -339,6 +346,7 @@ window.closeEditDeviceModal = function() {
 };
 
 window.confirmDeleteDevice = async function(id) {
+    if (window.Roles && !Roles.guard("delete", "Only administrators can delete devices.")) return;
     const dev = allDevices.find(d => d.id == id);
     const token = dev ? dev.device_token : `#${id}`;
 

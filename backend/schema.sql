@@ -188,4 +188,5 @@ INSERT INTO users
 VALUES
 (1, 'admin', 'admin123', 'Administrator', 'ADMIN', 'ACTIVE'),
 (2, 'manager', 'manager123', 'Cold Chain Manager', 'MANAGER', 'ACTIVE'),
-(3, 'user', 'user123', 'Operations Specialist', 'USER', 'ACTIVE');
+(3, 'user', 'user123', 'Operations Specialist', 'USER', 'ACTIVE'),
+(4, 'staff', 'staff123', 'Warehouse Staff', 'STAFF', 'ACTIVE');

@@ -407,6 +407,7 @@ function reloadReportTable() {
  * Export data function with options (CSV / ISO Compliance Certificate)
  */
 function exportReportData() {
+    if (window.Roles && !Roles.guard("export", "Staff accounts cannot export reports.")) return;
     const choice = confirm("EXPORT OPTIONS:\n\nClick OK to download the detailed telemetry CSV dataset.\nClick Cancel to generate a GDP / ISO 9001 Compliance Certificate.");
 
     if (choice) {
