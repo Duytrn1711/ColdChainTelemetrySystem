@@ -120,8 +120,6 @@ const Roles = {
         if (!aside) return;
 
         const user = api.getCurrentUser() || { full_name: "User", role: "STAFF", username: "staff" };
-        const showSettings = this.can("settings");
-        const showMgmt = this.can("write") || this.can("settings");
 
         aside.innerHTML = `
             <div class="sidebar-brand">
@@ -141,20 +139,10 @@ const Roles = {
                     ${this.navItem("data", this.href("data"), "Telemetry Data")}
                     ${this.navItem("alerts", this.href("alerts"), "Alerts", '<span class="nav-badge" id="nav-alert-count">3</span>')}
                 </ul>
-                ${showMgmt ? `
                 <div class="nav-section-title">MANAGEMENT</div>
                 <ul class="nav-list">
                     ${this.navItem("reports", this.href("reports"), "Reports")}
-                    ${showSettings ? `
-                    <li class="nav-item">
-                        <a href="#" onclick="openSettingsModal(); return false;">
-                            <div class="nav-link-content">
-                                ${this.icon("settings")}
-                                <span>Settings</span>
-                            </div>
-                        </a>
-                    </li>` : ""}
-                </ul>` : ""}
+                </ul>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-profile">

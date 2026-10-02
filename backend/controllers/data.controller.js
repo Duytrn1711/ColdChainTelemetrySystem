@@ -208,17 +208,28 @@ exports.createData = async (req, res) => {
             });
         }
 
-        // Lấy ID tự tăng
-        const maxIdRes = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM data");
-        const nextId = maxIdRes.rows[0].next_id;
+        // Lấy ID tự tăng an toàn chống race condition
+        let record = null;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const maxIdRes = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM data");
+                const nextId = Number(maxIdRes.rows[0].next_id) + attempt;
 
-        const insertRes = await pool.query(`
-            INSERT INTO data (id, device_id, temperature, humidity, created_at)
-            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-            RETURNING *
-        `, [nextId, device_id, temperature, humidity || null]);
-
-        const record = insertRes.rows[0];
+                const insertRes = await pool.query(`
+                    INSERT INTO data (id, device_id, temperature, humidity, created_at)
+                    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                    RETURNING *
+                `, [nextId, device_id, temperature, humidity || null]);
+                record = insertRes.rows[0];
+                break;
+            } catch (err) {
+                if (err.code === "23505" && attempt < 4) {
+                    await new Promise(r => setTimeout(r, 40 * (attempt + 1)));
+                    continue;
+                }
+                throw err;
+            }
+        }
 
         // Tự động kiểm tra ngưỡng nhiệt độ an toàn chuỗi lạnh (2.0°C - 8.0°C)
         const tempVal = parseFloat(temperature);
@@ -227,11 +238,22 @@ exports.createData = async (req, res) => {
             const alertType = isHigh ? "NHIỆT ĐỘ QUÁ CAO" : "NHIỆT ĐỘ QUÁ THẤP";
             const alertContent = `Phát hiện: Thiết bị #${device_id} có nhiệt độ ${tempVal.toFixed(2)}°C vượt ngưỡng an toàn chuỗi lạnh (2.0°C - 8.0°C).`;
 
-            const maxAlertId = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM alert");
-            await pool.query(`
-                INSERT INTO alert (id, device_id, alert_type, alert_content, created_at)
-                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-            `, [maxAlertId.rows[0].next_id, device_id, alertType, alertContent]);
+            for (let aAttempt = 0; aAttempt < 5; aAttempt++) {
+                try {
+                    const maxAlertId = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM alert");
+                    await pool.query(`
+                        INSERT INTO alert (id, device_id, alert_type, alert_content, created_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                    `, [Number(maxAlertId.rows[0].next_id) + aAttempt, device_id, alertType, alertContent]);
+                    break;
+                } catch (aErr) {
+                    if (aErr.code === "23505" && aAttempt < 4) {
+                        await new Promise(r => setTimeout(r, 40 * (aAttempt + 1)));
+                        continue;
+                    }
+                    throw aErr;
+                }
+            }
         }
 
         return res.status(201).json({
@@ -300,17 +322,29 @@ exports.simulateTelemetry = async (req, res) => {
 
         const humidity = (68 + Math.random() * 16).toFixed(1); // 68 - 84% RH
 
-        // Tạo bản ghi dữ liệu
-        const maxIdRes = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM data");
-        const nextId = maxIdRes.rows[0].next_id;
+        // Tạo bản ghi dữ liệu an toàn chống race condition
+        let record = null;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const maxIdRes = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM data");
+                const nextId = Number(maxIdRes.rows[0].next_id) + attempt;
 
-        const insertRes = await pool.query(`
-            INSERT INTO data (id, device_id, temperature, humidity, created_at)
-            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-            RETURNING *
-        `, [nextId, device_id, temp, humidity]);
+                const insertRes = await pool.query(`
+                    INSERT INTO data (id, device_id, temperature, humidity, created_at)
+                    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                    RETURNING *
+                `, [nextId, device_id, temp, humidity]);
+                record = insertRes.rows[0];
+                break;
+            } catch (err) {
+                if (err.code === "23505" && attempt < 4) {
+                    await new Promise(r => setTimeout(r, 40 * (attempt + 1)));
+                    continue;
+                }
+                throw err;
+            }
+        }
 
-        const record = insertRes.rows[0];
         let alertGenerated = null;
 
         const tempVal = parseFloat(temp);
@@ -319,13 +353,24 @@ exports.simulateTelemetry = async (req, res) => {
             const alertType = isHigh ? "NHIỆT ĐỘ QUÁ CAO" : "NHIỆT ĐỘ QUÁ THẤP";
             const alertContent = `Mô phỏng IoT: Thiết bị #${device_id} ghi nhận ${tempVal}°C vượt ngưỡng an toàn chuỗi lạnh (2.0°C - 8.0°C).`;
 
-            const maxAlertId = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM alert");
-            const alertRes = await pool.query(`
-                INSERT INTO alert (id, device_id, alert_type, alert_content, created_at)
-                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                RETURNING *
-            `, [maxAlertId.rows[0].next_id, device_id, alertType, alertContent]);
-            alertGenerated = alertRes.rows[0];
+            for (let aAttempt = 0; aAttempt < 5; aAttempt++) {
+                try {
+                    const maxAlertId = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM alert");
+                    const alertRes = await pool.query(`
+                        INSERT INTO alert (id, device_id, alert_type, alert_content, created_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                        RETURNING *
+                    `, [Number(maxAlertId.rows[0].next_id) + aAttempt, device_id, alertType, alertContent]);
+                    alertGenerated = alertRes.rows[0];
+                    break;
+                } catch (aErr) {
+                    if (aErr.code === "23505" && aAttempt < 4) {
+                        await new Promise(r => setTimeout(r, 40 * (aAttempt + 1)));
+                        continue;
+                    }
+                    throw aErr;
+                }
+            }
         }
 
         // Lấy thông tin thiết bị và vị trí gắn

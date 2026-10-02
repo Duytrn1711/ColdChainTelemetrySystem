@@ -525,64 +525,6 @@
         </div>
     </div>
 
-    <!-- Modal: Generate Custom Audit Report -->
-    <div class="modal-backdrop" id="generate-report-modal">
-        <div class="modal-card" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3>📑 Generate Custom Cold Chain Report</h3>
-                <button type="button" class="modal-close-btn" onclick="closeGenerateReportModal()">&times;</button>
-            </div>
-            <form id="custom-report-form" onsubmit="handleGenerateReportSubmit(event)">
-                <div class="modal-body">
-                    <div class="form-field">
-                        <label for="rep-type-select">Report Type *</label>
-                        <select id="rep-type-select" required>
-                            <option value="gdp_audit">GDP Cold Chain Compliance Audit</option>
-                            <option value="excursion_summary">Temperature Excursion &amp; Corrective Actions</option>
-                            <option value="mkt_analysis">Mean Kinetic Temperature (MKT) Detailed Assessment</option>
-                            <option value="fleet_performance">Refrigerated Fleet Route Thermal Stability</option>
-                            <option value="sensor_health">Sensor Calibration &amp; Transmitter Battery Health</option>
-                        </select>
-                    </div>
-
-                    <div class="form-row" style="display:flex; gap:12px;">
-                        <div class="form-field" style="flex:1;">
-                            <label for="rep-start-date">Start Date *</label>
-                            <input type="date" id="rep-start-date" required>
-                        </div>
-                        <div class="form-field" style="flex:1;">
-                            <label for="rep-end-date">End Date *</label>
-                            <input type="date" id="rep-end-date" required>
-                        </div>
-                    </div>
-
-                    <div class="form-field">
-                        <label for="rep-target-entity">Filter Scope</label>
-                        <select id="rep-target-entity">
-                            <option value="all">Entire Cold Chain Network (All Warehouses &amp; Fleet)</option>
-                            <option value="warehouses_only">All Cold Storage Warehouses</option>
-                            <option value="vehicles_only">All Delivery Vehicles</option>
-                        </select>
-                    </div>
-
-                    <div class="form-field">
-                        <label for="rep-export-format">Export Format *</label>
-                        <select id="rep-export-format" required>
-                            <option value="pdf">Print-Ready PDF Compliance Dossier (with SHA-256 seal)</option>
-                            <option value="xlsx">Microsoft Excel Spreadsheet (.xlsx)</option>
-                            <option value="csv">Comma-Separated Values (.csv)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeGenerateReportModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="btn-submit-report">Generate &amp;
-                        Download</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Scripts -->
     <script src="../js/api.js"></script>
     <script src="../js/roles.js"></script>
