@@ -582,24 +582,6 @@
                             </div>
                         </div>
 
-                        <!-- 3 Mini Metric Cards -->
-                        <div class="wh-metrics-row">
-                            <div class="wh-metric-box">
-                                <label>DOCKED VEHICLES</label>
-                                <div class="val" id="panel-wh-vehicles">4</div>
-                                <div class="sub">2 Active Reefers</div>
-                            </div>
-                            <div class="wh-metric-box">
-                                <label>ONLINE SENSORS</label>
-                                <div class="val" id="panel-wh-sensors">6</div>
-                                <div class="sub" style="color:#10b981;">100% Signal</div>
-                            </div>
-                            <div class="wh-metric-box">
-                                <label>ACTIVE EXCURSIONS</label>
-                                <div class="val" style="color:#10b981;">0</div>
-                                <div class="sub" style="color:#64748b;">Nominal</div>
-                            </div>
-                        </div>
 
                         <!-- Real-time Chamber Temperature Profile Chart (Matching Vehicles Page) -->
                         <div
@@ -629,61 +611,6 @@
                             </div>
                         </div>
 
-                        <!-- Compound Telemetry & Loading Bays -->
-                        <div style="margin-bottom: 16px;">
-                            <div
-                                style="display:flex; justify-content:space-between; font-size:11px; font-weight:700; color:#64748b; margin-bottom:10px;">
-                                <span>COMPOUND TELEMETRY &amp; LOADING BAYS</span>
-                                <span style="color:#2563eb;">● Live RF Ping</span>
-                            </div>
-
-                            <div class="chamber-cards-grid">
-                                <div class="chamber-card">
-                                    <div class="name">Chamber A <span
-                                            style="width:6px; height:6px; background:#10b981; border-radius:50%;"></span>
-                                    </div>
-                                    <div class="temp" id="chamber-a-temp">3.4°C</div>
-                                    <div class="type">Vaccines &amp; Pharma</div>
-                                </div>
-                                <div class="chamber-card">
-                                    <div class="name">Chamber B <span
-                                            style="width:6px; height:6px; background:#10b981; border-radius:50%;"></span>
-                                    </div>
-                                    <div class="temp" id="chamber-b-temp">4.1°C</div>
-                                    <div class="type">Cold Storage</div>
-                                </div>
-                                <div class="chamber-card">
-                                    <div class="name">Chamber C <span
-                                            style="width:6px; height:6px; background:#10b981; border-radius:50%;"></span>
-                                    </div>
-                                    <div class="temp" id="chamber-c-temp">-20.5°C</div>
-                                    <div class="type">Plasma Deep Freeze</div>
-                                </div>
-                            </div>
-
-                            <div
-                                style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:10px 12px; font-size:12px; display:flex; align-items:center; justify-content:space-between; color:#0369a1;">
-                                <span>🚚 Dock Bays 01-04 (Vehicles: 29A-12345, 29A-67890 Docked)</span>
-                                <strong style="color:#0284c7;">Active Cold Transfer</strong>
-                            </div>
-                        </div>
-
-                        <!-- Geographic Map Anchor -->
-                        <div>
-                            <div
-                                style="display:flex; justify-content:space-between; font-size:11px; font-weight:700; color:#64748b; margin-bottom:8px;">
-                                <span>GEOGRAPHIC RADAR ANCHOR</span>
-                                <a href="#" style="color:#2563eb; text-decoration:none;"
-                                    onclick="triggerGpsForSelectedWh(); return false;">Open GPS Track 🛰️</a>
-                            </div>
-                            <div class="map-anchor-box" onclick="triggerGpsForSelectedWh()" style="cursor:pointer;"
-                                title="Click to open Satellite GPS Radar Tracking">
-                                <div class="map-pin-pill">
-                                    <span style="color:#2563eb;">📍</span>
-                                    <span id="map-pin-label">Hanoi Central Hub • WH-01</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </main>

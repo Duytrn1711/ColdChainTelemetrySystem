@@ -488,59 +488,6 @@
         </div>
     </div>
 
-    <!-- Modal: Simulate Telemetry Reading -->
-    <div class="modal-backdrop" id="simulate-modal">
-        <div class="modal-card" style="max-width: 480px;">
-            <div class="modal-header">
-                <h3>⚡ Dispatch Simulated IoT Telemetry Packet</h3>
-                <button type="button" class="modal-close-btn" onclick="closeSimulateModal()">&times;</button>
-            </div>
-            <form id="simulate-telemetry-form" onsubmit="handleSimulateSubmit(event)">
-                <div class="modal-body">
-                    <p style="font-size:13px; color:#64748b; margin-bottom:14px;">
-                        Sends an instantaneous simulated sensor packet to the backend ingestion queue. Useful for
-                        testing alerts, thresholds, and cold chain validation.
-                    </p>
-                    <div class="form-field">
-                        <label for="sim-device-select">Target Sensor Device *</label>
-                        <select id="sim-device-select" required>
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                    <div class="form-row" style="display:flex; gap:12px;">
-                        <div class="form-field" style="flex:1;">
-                            <label for="sim-temp-input">Temperature (°C) *</label>
-                            <input type="number" id="sim-temp-input" step="0.1" value="4.5" required>
-                        </div>
-                        <div class="form-field" style="flex:1;">
-                            <label for="sim-hum-input">Humidity (% RH) *</label>
-                            <input type="number" id="sim-hum-input" step="1" value="65" min="0" max="100" required>
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button type="button" class="btn btn-secondary" style="font-size:12px; flex:1;"
-                            onclick="setSimPreset(4.5, 65)">
-                            🟢 Nominal (4.5°C)
-                        </button>
-                        <button type="button" class="btn btn-secondary"
-                            style="font-size:12px; flex:1; color:#ef4444; border-color:#fecaca;"
-                            onclick="setSimPreset(11.2, 85)">
-                            🚨 Excursion (>8°C)
-                        </button>
-                        <button type="button" class="btn btn-secondary"
-                            style="font-size:12px; flex:1; color:#2563eb; border-color:#bfdbfe;"
-                            onclick="setSimPreset(0.5, 60)">
-                            ❄️ Sub-zero (<2°C) </button>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeSimulateModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="btn-submit-simulate">Dispatch Packet</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Scripts -->
     <script src="../js/api.js"></script>
     <script src="../js/roles.js"></script>
