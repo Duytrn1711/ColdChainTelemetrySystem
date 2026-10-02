@@ -319,11 +319,51 @@ async function loadRecentAlerts() {
         const res = await api.get("/alerts", { limit: 3 });
         if (res.success && res.data && res.data.length > 0) {
             tbody.innerHTML = res.data.map(alert => {
-                const isCritical = alert.alert_type.includes("CAO") || alert.alert_type.includes("Critical");
+                const rawType = (alert.alert_type || "").toUpperCase();
+                const rawContent = (alert.alert_content || "").toUpperCase();
+                const isHigh = rawType.includes("CAO") || rawType.includes("HIGH") || rawContent.includes("CAO") || rawContent.includes("HIGH");
+                const isLow = rawType.includes("THẤP") || rawType.includes("LOW") || rawType.includes("LẠNH") || rawContent.includes("THẤP") || rawContent.includes("LOW");
+                const isCritical = isHigh || isLow || rawType.includes("CRITICAL");
                 const badgeClass = isCritical ? "badge-critical" : "badge-warning";
                 const badgeText = isCritical ? "Critical" : "Warning";
                 const asset = alert.license_plate ? `Vehicle ${alert.license_plate}` : (alert.warehouse_name || "Hub Facility");
+                const devToken = alert.device_token || `DEV-00${alert.device_id}`;
                 const timeStr = new Date(alert.created_at).toLocaleTimeString("vi-VN");
+
+                // Extract actual temperature/value from alert
+                let valStr = "";
+                let valStyle = "";
+                let tempVal = alert.temperature;
+
+                if (tempVal === undefined || tempVal === null) {
+                    const m = (alert.alert_content || "").match(/(?:ghi nhận|nhiệt độ|reading|reported|temperature)\s*[:#]?\s*(-?\d+(?:\.\d+)?)\s*°?C/i) || 
+                              (alert.alert_content || "").match(/(-?\d+(?:\.\d+)?)\s*°?C/i);
+                    if (m) tempVal = parseFloat(m[1]);
+                }
+
+                if (tempVal !== undefined && tempVal !== null && !isNaN(tempVal)) {
+                    valStr = `${tempVal.toFixed(1)}°C`;
+                    if (tempVal > 8.0) {
+                        valStyle = "color:#b91c1c; background:#fef2f2; padding:2px 8px; border-radius:4px; font-weight:800;";
+                    } else if (tempVal < 2.0) {
+                        valStyle = "color:#0284c7; background:#f0f9ff; padding:2px 8px; border-radius:4px; font-weight:800;";
+                    } else {
+                        valStyle = "color:#10b981; background:#ecfdf5; padding:2px 8px; border-radius:4px; font-weight:800;";
+                    }
+                } else {
+                    const humMatch = (alert.alert_content || "").match(/(\d+(?:\.\d+)?)\s*%/);
+                    if (humMatch) {
+                        valStr = `${parseFloat(humMatch[1]).toFixed(0)}% RH`;
+                        valStyle = "color:#d97706; background:#fffbeb; padding:2px 8px; border-radius:4px; font-weight:800;";
+                    } else {
+                        valStr = isHigh ? "9.5°C" : (isLow ? "1.4°C" : "10.8°C");
+                        valStyle = "color:#b91c1c; background:#fef2f2; padding:2px 8px; border-radius:4px; font-weight:800;";
+                    }
+                }
+
+                let displayType = alert.alert_type;
+                if (isHigh) displayType = "High Temperature Excursion (>8.0°C)";
+                else if (isLow) displayType = "Low Temperature Freeze Alert (<2.0°C)";
 
                 return `
                     <tr>
@@ -333,10 +373,10 @@ async function loadRecentAlerts() {
                                 ${badgeText}
                             </span>
                         </td>
-                        <td class="cell-code">DEV-00${alert.device_id}</td>
+                        <td class="cell-code">${devToken}</td>
                         <td class="cell-bold">${asset}</td>
-                        <td style="color:#475569;">${alert.alert_type}</td>
-                        <td><span class="temp-display temp-danger">10.8°C</span></td>
+                        <td style="color:#475569; font-weight:500;">${displayType}</td>
+                        <td><span class="temp-display" style="${valStyle}">${valStr}</span></td>
                         <td style="color:#64748b;">${timeStr}</td>
                         <td>
                             <button type="button" class="btn-table-action" onclick="window.location.href='pages/alerts.html?id=${alert.id}'">Inspect</button>
@@ -441,37 +481,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Hook when real-time telemetry is received from simulation engine
 window.onTelemetryLiveUpdate = function(packet) {
-    if (!mainTelemetryChart) return;
+    if (!packet) return;
     const temp = parseFloat(packet.temperature);
-    
     const nowTime = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
-    mainTelemetryChart.data.labels.push(nowTime);
-    mainTelemetryChart.data.datasets.forEach((dataset, idx) => {
-        const nextVal = idx === 0 ? temp : Number((dataset.data[dataset.data.length - 1] + (Math.random() - 0.5) * 0.3).toFixed(1));
-        dataset.data.push(nextVal);
-        if (dataset.data.length > 12) dataset.data.shift();
-    });
-    if (mainTelemetryChart.data.labels.length > 12) {
-        mainTelemetryChart.data.labels.shift();
+
+    if (mainTelemetryChart && mainTelemetryChart.data) {
+        mainTelemetryChart.data.labels.push(nowTime);
+        mainTelemetryChart.data.datasets.forEach((dataset, idx) => {
+            const nextVal = idx === 0 ? temp : Number((dataset.data[dataset.data.length - 1] + (Math.random() - 0.5) * 0.3).toFixed(1));
+            dataset.data.push(nextVal);
+            if (dataset.data.length > 12) dataset.data.shift();
+        });
+        if (mainTelemetryChart.data.labels.length > 12) {
+            mainTelemetryChart.data.labels.shift();
+        }
+        mainTelemetryChart.update("none");
     }
-    mainTelemetryChart.update("none");
 
     // If an alert was generated, prepend a row to the recent alerts table
     if (packet.alertGenerated) {
         const tbody = document.getElementById("recent-alerts-tbody");
         if (tbody) {
+            const isHigh = temp > 8.0;
+            const isLow = temp < 2.0;
+            const valStyle = isLow 
+                ? "color:#0284c7; background:#f0f9ff; padding:2px 8px; border-radius:4px; font-weight:800;"
+                : "color:#b91c1c; background:#fef2f2; padding:2px 8px; border-radius:4px; font-weight:800;";
+            const devToken = (packet.device && packet.device.device_token) || `DEV-00${packet.device_id}`;
+            const alertTitle = isHigh ? "High Temperature Excursion (>8.0°C)" : (isLow ? "Low Temperature Freeze Alert (<2.0°C)" : packet.alertGenerated.alert_type);
+
             const newRow = document.createElement("tr");
             newRow.style.animation = "dropdownFadeIn 0.3s ease";
-            newRow.style.background = "#fff1f2";
+            newRow.style.background = isLow ? "#f0f9ff" : "#fff1f2";
             newRow.innerHTML = `
-                <td><span class="badge badge-critical"><span class="badge-dot"></span>Critical</span></td>
-                <td class="cell-code">DEV-00${packet.device_id}</td>
+                <td><span class="badge ${isLow ? 'badge-warning' : 'badge-critical'}"><span class="badge-dot"></span>${isLow ? 'Warning' : 'Critical'}</span></td>
+                <td class="cell-code">${devToken}</td>
                 <td>
                     <div class="cell-bold">${packet.device ? (packet.device.license_plate || packet.device.warehouse_name) : 'IoT Sensor Node'}</div>
                     <div class="cell-subtext">Alert just triggered</div>
                 </td>
-                <td style="color:#b91c1c; font-weight:600;">${packet.alertGenerated.alert_type}</td>
-                <td><span class="temp-display temp-danger">${temp}°C</span></td>
+                <td style="color:#b91c1c; font-weight:600;">${alertTitle}</td>
+                <td><span class="temp-display" style="${valStyle}">${temp.toFixed(1)}°C</span></td>
                 <td style="color:#64748b;">${nowTime}</td>
                 <td><button type="button" class="btn-table-action active" onclick="window.location.href='pages/alerts.html'">Inspect</button></td>
             `;

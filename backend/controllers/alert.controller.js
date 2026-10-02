@@ -35,9 +35,22 @@ exports.getAllAlerts = async (req, res) => {
 
         const result = await pool.query(query, params);
 
+        const rows = result.rows.map(row => {
+            let tempVal = null;
+            const m = (row.alert_content || "").match(/(?:ghi nhận|nhiệt độ|reading|reported|temperature)\s*[:#]?\s*(-?\d+(?:\.\d+)?)\s*°?C/i) || 
+                      (row.alert_content || "").match(/(-?\d+(?:\.\d+)?)\s*°?C/i);
+            if (m) {
+                tempVal = parseFloat(m[1]);
+            }
+            return {
+                ...row,
+                temperature: tempVal
+            };
+        });
+
         return res.json({
             success: true,
-            data: result.rows,
+            data: rows,
             message: "Lấy danh sách cảnh báo thành công"
         });
     } catch (error) {
@@ -82,9 +95,20 @@ exports.getAlertById = async (req, res) => {
             });
         }
 
+        const alert = result.rows[0];
+        let tempVal = null;
+        const m = (alert.alert_content || "").match(/(?:ghi nhận|nhiệt độ|reading|reported|temperature)\s*[:#]?\s*(-?\d+(?:\.\d+)?)\s*°?C/i) || 
+                  (alert.alert_content || "").match(/(-?\d+(?:\.\d+)?)\s*°?C/i);
+        if (m) {
+            tempVal = parseFloat(m[1]);
+        }
+
         return res.json({
             success: true,
-            data: result.rows[0],
+            data: {
+                ...alert,
+                temperature: tempVal
+            },
             message: "Lấy chi tiết cảnh báo thành công"
         });
     } catch (error) {
