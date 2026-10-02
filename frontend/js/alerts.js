@@ -1249,9 +1249,9 @@ function handleDispatchSubmit(e) {
 
 function viewLiveTelemetry() {
     if (currentSelectedIncident && currentSelectedIncident.device_id) {
-        window.location.href = `reports.html?search=${encodeURIComponent(currentSelectedIncident.device_id)}`;
+        window.location.href = `data.html?search=${encodeURIComponent(currentSelectedIncident.device_id)}`;
     } else {
-        window.location.href = "reports.html";
+        window.location.href = "data.html";
     }
 }
 window.viewLiveTelemetry = viewLiveTelemetry;

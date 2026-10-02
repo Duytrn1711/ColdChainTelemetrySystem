@@ -77,6 +77,7 @@ const Roles = {
         if (path.includes("warehouse")) return "warehouses";
         if (path.includes("vehicle")) return "vehicles";
         if (path.includes("device")) return "devices";
+        if (path.includes("data") || path.includes("telemetry")) return "data";
         if (path.includes("report")) return "reports";
         if (path.includes("alert")) return "alerts";
         return "dashboard";
@@ -89,6 +90,7 @@ const Roles = {
             warehouses: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
             vehicles: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>',
             devices: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"></path></svg>',
+            data: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>',
             telemetry: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>',
             alerts: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
             reports: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
@@ -104,7 +106,7 @@ const Roles = {
             <li class="nav-item${active}">
                 <a href="${href}">
                     <div class="nav-link-content">
-                        ${this.icon(key === "reports" && label === "Telemetry Data" ? "telemetry" : key)}
+                        ${this.icon(key)}
                         <span>${label}</span>
                     </div>
                     ${extra}
@@ -136,7 +138,7 @@ const Roles = {
                     ${this.navItem("warehouses", this.href("warehouses"), "Warehouses")}
                     ${this.navItem("vehicles", this.href("vehicles"), "Delivery Vehicles")}
                     ${this.navItem("devices", this.href("devices"), "Devices")}
-                    ${this.navItem("reports", this.href("reports"), "Telemetry Data")}
+                    ${this.navItem("data", this.href("data"), "Telemetry Data")}
                     ${this.navItem("alerts", this.href("alerts"), "Alerts", '<span class="nav-badge" id="nav-alert-count">3</span>')}
                 </ul>
                 ${showMgmt ? `
