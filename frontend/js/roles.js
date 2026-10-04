@@ -44,7 +44,6 @@ const Roles = {
             case "resolveAlert":
             case "acknowledge":
                 return r >= 2;
-            case "simulate":
             case "delete":
             case "settings":
             case "admin":

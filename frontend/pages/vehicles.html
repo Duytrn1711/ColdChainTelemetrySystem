@@ -58,6 +58,8 @@
         .fleet-nodes-container {
             display: flex;
             flex-direction: column;
+            max-height: 560px;
+            overflow-y: auto;
         }
 
         .fleet-node-item {
@@ -535,8 +537,7 @@
                                 </svg>
                                 Reefer Fleet Live Nodes
                             </h3>
-                            <span style="font-size:12px; color:#64748b;" id="rendered-fleet-nodes-tag">4 of 10
-                                RENDERED</span>
+                            <span style="font-size:12px; color:#64748b;" id="rendered-fleet-nodes-tag">Units</span>
                         </div>
 
                         <div class="fleet-nodes-container" id="fleet-nodes-list">
@@ -545,10 +546,9 @@
 
                         <div
                             style="padding:14px 20px; border-top:1px solid var(--border-light); font-size:12px; display:flex; justify-content:space-between; align-items:center; color:#64748b;">
-                            <span>Compliance Grade: <strong>98.2%</strong></span>
-                            <a href="#" style="color:#2563eb; font-weight:600; text-decoration:none;"
-                                onclick="showToast('Displaying all 10 fleet vehicles', 'info'); return false;">View All
-                                10 Units →</a>
+                            <span>Compliance: <strong id="v-fleet-compliance-grade">--</strong></span>
+                            <a href="#" style="color:#2563eb; font-weight:600; text-decoration:none;" id="v-view-all-link"
+                                onclick="renderVehicleNodes(allVehicles); return false;">Show All Fleet →</a>
                         </div>
                     </div>
 
@@ -611,21 +611,20 @@
 
                             <!-- 5 Stat Tiles Grid -->
                             <div class="v-stats-5-grid">
-                                <div class="v-stat-tile" style="border-color:#fecaca; background:#fff1f2;">
-                                    <label style="color:#b91c1c;">Cargo Temp 🌡️</label>
-                                    <div class="big-val" style="color:#ef4444;" id="v-stat-temp">10.8°C</div>
-                                    <div class="sub-note" style="color:#b91c1c; font-weight:600;">↑ +2.8°C over limit
-                                    </div>
+                                <div class="v-stat-tile" id="v-stat-temp-tile">
+                                    <label id="v-stat-temp-label">Cargo Temp 🌡️</label>
+                                    <div class="big-val" id="v-stat-temp">--</div>
+                                    <div class="sub-note" id="v-stat-temp-sub">Optimal (2°C - 8°C)</div>
                                 </div>
-                                <div class="v-stat-tile">
+                                <div class="v-stat-tile" id="v-stat-hum-tile">
                                     <label>Humidity 💧</label>
-                                    <div class="big-val" id="v-stat-hum">76%</div>
-                                    <div class="sub-note">Safe (65-80%)</div>
+                                    <div class="big-val" id="v-stat-hum">--</div>
+                                    <div class="sub-note" id="v-stat-hum-sub">Safe (60-85%)</div>
                                 </div>
                                 <div class="v-stat-tile">
                                     <label>IoT Node 📡</label>
-                                    <div class="big-val" style="font-size:18px;" id="v-stat-node">DEV-004</div>
-                                    <div class="sub-note" style="color:#2563eb;">● BLE 5.2 Mesh</div>
+                                    <div class="big-val" style="font-size:16px;" id="v-stat-node">--</div>
+                                    <div class="sub-note" style="color:#2563eb;" id="v-stat-node-sub">● BLE 5.2 Mesh</div>
                                 </div>
                                 <div class="v-stat-tile">
                                     <label>Battery 🔋</label>
@@ -634,21 +633,18 @@
                                 </div>
                                 <div class="v-stat-tile">
                                     <label>Speed ⏱️</label>
-                                    <div class="big-val">52 <span style="font-size:14px; font-weight:500;">km/h</span>
-                                    </div>
+                                    <div class="big-val">52 <span style="font-size:14px; font-weight:500;">km/h</span></div>
                                     <div class="sub-note">Highway Cruise</div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Vehicle Temperature Profile (Last 4 Hours) Chart -->
+                        <!-- Vehicle Temperature Profile (Database Telemetry) Chart -->
                         <div class="v-chart-card">
                             <div class="v-chart-header">
                                 <div>
-                                    <h3 style="font-size:16px; font-weight:700;">Vehicle Temperature Profile (Last 4
-                                        Hours)</h3>
-                                    <p style="font-size:13px; color:#64748b; margin-top:2px;">Sudden temperature thermal
-                                        spike from 4.5°C to 10.8°C at 10:42</p>
+                                    <h3 style="font-size:16px; font-weight:700;" id="v-chart-title">Vehicle Temperature Profile</h3>
+                                    <p style="font-size:13px; color:#64748b; margin-top:2px;" id="v-chart-subtitle">Telemetry readings loaded from database</p>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:16px; font-size:12px;">
                                     <span style="display:flex; align-items:center; gap:6px;">
@@ -664,7 +660,7 @@
                                 </div>
                             </div>
 
-                            <div style="position:relative; width:100%; height:260px;">
+                            <div style="position:relative; width:100%; height:260px;" id="v-chart-container">
                                 <canvas id="vehicleProfileChart"></canvas>
                             </div>
                         </div>
@@ -675,7 +671,7 @@
                             <div class="v-route-card">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
                                     <h4 style="font-size:15px; font-weight:700;">Route &amp; Geofence</h4>
-                                    <span class="badge badge-transit" style="font-size:11px;">Route #TR-409</span>
+                                    <span class="badge badge-transit" style="font-size:11px;" id="v-route-code-tag">Route #TR-409</span>
                                 </div>
 
                                 <div
@@ -689,13 +685,12 @@
 
                                 <div class="timeline-route">
                                     <div class="timeline-point">
-                                        <div style="font-weight:700; color:#0f172a;">Origin: Hanoi WH-01</div>
-                                        <div style="color:#64748b;">Departed 09:15 AM · Dock 04</div>
+                                        <div style="font-weight:700; color:#0f172a;" id="v-route-origin-title">Origin: Depot Hub</div>
+                                        <div style="color:#64748b;" id="v-route-origin-sub">Departed 09:15 AM · Cold Dock</div>
                                     </div>
                                     <div class="timeline-point dest">
-                                        <div style="font-weight:700; color:#ef4444;">Destination: Bac Ninh Hospital
-                                        </div>
-                                        <div style="color:#64748b;">Pediatric Vaccine Delivery Depot</div>
+                                        <div style="font-weight:700; color:#2563eb;" id="v-route-dest-title">Destination: Regional Medical Center</div>
+                                        <div style="color:#64748b;" id="v-route-dest-sub">Cold Chain Delivery Route</div>
                                     </div>
                                 </div>
                             </div>
@@ -705,8 +700,7 @@
                                 <div
                                     style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                                     <h4 style="font-size:15px; font-weight:700;">Telemetry Ping History</h4>
-                                    <span style="font-size:12px; color:#64748b;" id="v-history-node-tag">Device:
-                                        DEV-004</span>
+                                    <span style="font-size:12px; color:#64748b;" id="v-history-node-tag">Device: --</span>
                                 </div>
 
                                 <div class="table-responsive">
@@ -722,32 +716,7 @@
                                         </thead>
                                         <tbody id="v-ping-history-tbody">
                                             <tr>
-                                                <td style="color:#ef4444; font-weight:600;">10:42:15</td>
-                                                <td><span class="temp-display temp-danger">10.8°C</span></td>
-                                                <td>76%</td>
-                                                <td class="cell-code">DEV-004</td>
-                                                <td><span class="badge badge-critical">HIGH</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>10:40:00</td>
-                                                <td><span class="temp-display temp-danger">8.9°C</span></td>
-                                                <td>75%</td>
-                                                <td class="cell-code">DEV-004</td>
-                                                <td><span class="badge badge-critical">HIGH</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>10:35:00</td>
-                                                <td><span class="temp-display temp-safe">6.1°C</span></td>
-                                                <td>73%</td>
-                                                <td class="cell-code">DEV-004</td>
-                                                <td><span class="badge badge-active">NOM</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>10:30:00</td>
-                                                <td><span class="temp-display temp-safe">4.8°C</span></td>
-                                                <td>71%</td>
-                                                <td class="cell-code">DEV-004</td>
-                                                <td><span class="badge badge-active">NOM</span></td>
+                                                <td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">Loading database telemetry...</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -755,10 +724,9 @@
 
                                 <div
                                     style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:11px; color:#64748b;">
-                                    <span>Showing last 4 sensor heartbeats</span>
+                                    <span id="v-ping-count-tag">Showing latest sensor heartbeats</span>
                                     <a href="data.html"
-                                        style="color:#2563eb; font-weight:600; text-decoration:none;">View full log
-                                        stream →</a>
+                                        style="color:#2563eb; font-weight:600; text-decoration:none;">View full log stream →</a>
                                 </div>
                             </div>
                         </div>

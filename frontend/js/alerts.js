@@ -1078,66 +1078,7 @@ function initSOPChecklist() {
     });
 }
 
-/**
- * Simulate live high-temperature excursion alarm
- */
-async function triggerSimulatedAlarm() {
-    if (window.Roles && !Roles.guard("simulate", "Only administrators can trigger test excursions.")) return;
-    showToast("Triggering simulated critical excursion...", "warning");
-    
-    if (typeof window.triggerExcursionAlarmSound === "function") {
-        window.triggerExcursionAlarmSound();
-    }
 
-    try {
-        const res = await api.post("/data/simulate", { force_excursion: "HIGH" });
-        if (res && res.success && res.data) {
-            const simulated = res.data;
-            showToast(`🚨 CRITICAL EXCURSION: Node #${simulated.device_id} reported ${simulated.temperature}°C (>8.0°C)!`, "error");
-
-            await loadAlerts();
-
-            if (allAlerts.length > 0) {
-                selectIncidentObject(allAlerts[0], true);
-            }
-            return;
-        }
-    } catch (e) {
-        console.error("Simulation API error, creating simulated client incident:", e);
-    }
-
-    // Client fallback simulation
-    const randId = Math.floor(5000 + Math.random() * 900);
-    const newAlt = {
-        id: randId,
-        severity: "CRITICAL",
-        device_id: "DEV-004",
-        raw_device_id: 4,
-        asset: "Vehicle 29A-12345",
-        isVehicle: true,
-        licensePlate: "29A-12345",
-        alert_type: "High Temperature Excursion",
-        alert_content: "Reefer compartment temperature reached 10.9°C exceeding safe threshold (8.0°C).",
-        value: "10.9°C",
-        tempNumeric: 10.9,
-        metricType: "TEMPERATURE",
-        targetRange: "Target Range: 2.0°C - 8.0°C",
-        driverName: "Nguyen Van Hung (Driver / Operator)",
-        contactPhone: "+84 912 345 678",
-        routeCorridor: "Hanoi Central WH-01 → Bac Ninh Cold Storage",
-        locationDetail: "KM 24 Highway 1A (Speed: 54 km/h)",
-        hardwareSub: "Battery: 94% · GSM High · Carrier Transicold X4",
-        chamberSub: "Door: Closed (Magnetic Seal OK)",
-        time: new Date().toLocaleTimeString("en-US", { hour12: false }),
-        status: "ACTIVE"
-    };
-
-    allAlerts.unshift(newAlt);
-    updateAlertStatCounters();
-    applyCurrentFilter();
-    selectIncidentObject(newAlt, true);
-    showToast("🚨 Simulated excursion alert added to active incident queue!", "error");
-}
 
 /**
  * Acknowledge incident

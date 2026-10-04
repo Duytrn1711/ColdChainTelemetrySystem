@@ -6,8 +6,6 @@
  * Fully synchronized in English.
  */
 
-let simulationTimer = null;
-let isSimulationActive = false;
 let audioAlertEnabled = true;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -18,7 +16,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     injectEnhancedUI();
     initCommandPalette();
-    initHeaderLiveControls();
     initProfileDropdown();
     initNotificationsDrawer();
     initSettingsModal();
@@ -242,103 +239,7 @@ function injectEnhancedUI() {
     document.body.appendChild(container);
 }
 
-// --- 2. HEADER LIVE CONTROLS & SIMULATION TOGGLE ---
-function initHeaderLiveControls() {
-    const headerLeft = document.querySelector(".top-header .header-left");
-    if (!headerLeft) return;
-
-    if (window.Roles && !Roles.can("simulate")) {
-        return;
-    }
-
-    if (!document.getElementById("btn-toggle-live-stream")) {
-        const liveWrapper = document.createElement("div");
-        liveWrapper.style.display = "flex";
-        liveWrapper.style.alignItems = "center";
-        liveWrapper.style.gap = "8px";
-        liveWrapper.style.marginLeft = "12px";
-
-        liveWrapper.innerHTML = `
-            <div class="live-stream-pill active" id="btn-toggle-live-stream" title="Toggle Real-Time IoT Stream Simulation">
-                <span class="live-pulse-dot"></span>
-                <span id="live-stream-text">Live IoT: Active</span>
-            </div>
-            <button type="button" class="btn-quick-ping" id="btn-manual-iot-ping" title="Send single IoT telemetry packet">
-                <span>⚡ IoT Ping</span>
-            </button>
-        `;
-
-        headerLeft.appendChild(liveWrapper);
-
-        const toggleBtn = document.getElementById("btn-toggle-live-stream");
-        toggleBtn.addEventListener("click", () => {
-            isSimulationActive = !isSimulationActive;
-            updateSimulationState();
-        });
-
-        const manualPingBtn = document.getElementById("btn-manual-iot-ping");
-        manualPingBtn.addEventListener("click", () => {
-            triggerTelemetryPing(false);
-        });
-
-        isSimulationActive = true;
-        updateSimulationState();
-    }
-}
-
-function updateSimulationState() {
-    const toggleBtn = document.getElementById("btn-toggle-live-stream");
-    const textEl = document.getElementById("live-stream-text");
-
-    if (isSimulationActive) {
-        if (toggleBtn) {
-            toggleBtn.className = "live-stream-pill active";
-        }
-        if (textEl) textEl.textContent = "Live IoT: Active";
-        if (!simulationTimer) {
-            const rate = parseInt(localStorage.getItem("cfg_polling_rate") || "8000", 10);
-            simulationTimer = setInterval(() => {
-                triggerTelemetryPing(false);
-            }, rate);
-        }
-    } else {
-        if (toggleBtn) {
-            toggleBtn.className = "live-stream-pill paused";
-        }
-        if (textEl) textEl.textContent = "Live IoT: Paused";
-        if (simulationTimer) {
-            clearInterval(simulationTimer);
-            simulationTimer = null;
-        }
-        showToast("Live IoT stream paused.", "info");
-    }
-}
-
-async function triggerTelemetryPing(forceExcursion = false) {
-    try {
-        const body = forceExcursion ? { force_excursion: "HIGH" } : {};
-        const res = await api.post("/data/simulate", body);
-        if (res.success && res.data) {
-            const item = res.data;
-            const temp = parseFloat(item.temperature);
-
-            window.dispatchEvent(new CustomEvent("coldchain:telemetry", { detail: item }));
-
-            if (item.alertGenerated) {
-                playAlertSound();
-                showToast(`🚨 [EXCURSION ALERT] Sensor ${item.device ? item.device.device_token : '#' + item.device_id} triggered ${temp}°C!`, "error");
-                updateNavAlertBadge(1);
-            } else {
-                if (forceExcursion) {
-                    showToast(`Recorded Telemetry: ${temp}°C (Safe Range)`, "info");
-                }
-            }
-        }
-    } catch (e) {
-        console.warn("Simulation ping error:", e);
-    }
-}
-
+// --- 2. ALERT BADGE & AUDIO UTILITIES ---
 function updateNavAlertBadge(delta = 1) {
     const badge = document.getElementById("nav-alert-count") || document.querySelector(".nav-badge");
     if (badge) {
@@ -565,10 +466,6 @@ const COMMAND_ACTIONS = [
     { name: "IoT Sensor Devices & Nodes", category: "NAVIGATION", icon: "📡", action: () => navigateToPage("devices") },
     { name: "Telemetry Data & Raw Streams", category: "NAVIGATION", icon: "📈", action: () => navigateToPage("data") },
     { name: "Cold Chain Reports & Audits", category: "NAVIGATION", icon: "📑", action: () => navigateToPage("reports") },
-    { name: "Incident & Excursion Alerts", category: "NAVIGATION", icon: "🛑", action: () => navigateToPage("alerts") },
-    { name: "Simulate Real-time IoT Packet (Ping Test)", category: "QUICK ACTIONS", icon: "⚡", need: "simulate", action: () => { triggerTelemetryPing(false); showToast("Dispatched simulated IoT telemetry packet!", "success"); } },
-    { name: "Trigger Critical Excursion Test (High Temp)", category: "QUICK ACTIONS", icon: "🚨", need: "simulate", action: () => { triggerTelemetryPing(true); } },
-    { name: "Toggle Live IoT Telemetry Stream", category: "QUICK ACTIONS", icon: "🔴", need: "simulate", action: () => { isSimulationActive = !isSimulationActive; updateSimulationState(); } },
     { name: "Generate WHO & ISO 9001 Compliance Certificate (PDF)", category: "REPORTS", icon: "🛡️", need: "export", action: () => generateAuditCertificate() },
     { name: "Configure Safe Temperature Thresholds", category: "SYSTEM", icon: "⚙️", need: "settings", action: () => openSettingsModal() },
     { name: "Change User Password", category: "ACCOUNT", icon: "🔑", action: () => openChangePwdModal() }
@@ -664,11 +561,6 @@ function initSettingsModal() {
         localStorage.setItem("cfg_polling_rate", rate);
         localStorage.setItem("cfg_audio_alert", audio ? "true" : "false");
         audioAlertEnabled = audio;
-
-        if (isSimulationActive && simulationTimer) {
-            clearInterval(simulationTimer);
-            simulationTimer = setInterval(() => triggerTelemetryPing(false), parseInt(rate, 10));
-        }
 
         closeSettingsModal();
         showToast("System thresholds saved successfully!", "success");

@@ -271,135 +271,163 @@ exports.createData = async (req, res) => {
     }
 };
 
-// POST /api/data/simulate - Mô phỏng sinh dữ liệu IoT từ cảm biến thời gian thực
-exports.simulateTelemetry = async (req, res) => {
+// GET /api/data/reports - Thống kê báo cáo tuân thủ từ database cho từng kho và xe
+// Tỷ lệ tuân thủ = (Số dữ liệu hợp lệ [2.0°C - 8.0°C] / Tổng số dữ liệu) * 100%
+// Nếu >= 98% -> 'COMPLIANT', ngược lại < 98% -> 'REVIEW REQUIRED'
+exports.getReportsData = async (req, res) => {
     try {
-        let { device_id, force_excursion, target_type } = req.body;
+        const { period } = req.query;
 
-        // If device_id not specified, pick randomly (optionally by target_type WAREHOUSE / VEHICLE)
-        if (!device_id) {
-            let devQuery = "SELECT id, device_token FROM device WHERE 1=1";
-            if (target_type === "WAREHOUSE") {
-                devQuery += " AND warehouse_id IS NOT NULL AND vehicle_id IS NULL";
-            } else if (target_type === "VEHICLE") {
-                devQuery += " AND vehicle_id IS NOT NULL";
-            }
-            devQuery += " ORDER BY RANDOM() LIMIT 1";
-
-            const devicesRes = await pool.query(devQuery);
-            if (devicesRes.rows.length === 0) {
-                // Fallback to any device
-                const fallback = await pool.query("SELECT id, device_token FROM device ORDER BY RANDOM() LIMIT 1");
-                if (fallback.rows.length === 0) {
-                    return res.status(400).json({
-                        success: false,
-                        data: null,
-                        message: "Chưa có thiết bị nào trong hệ thống để mô phỏng"
-                    });
-                }
-                device_id = fallback.rows[0].id;
-            } else {
-                device_id = devicesRes.rows[0].id;
-            }
+        let dateFilter = "";
+        if (period === "today") {
+            dateFilter = " AND dt.created_at >= CURRENT_DATE";
+        } else if (period === "week") {
+            dateFilter = " AND dt.created_at >= (CURRENT_TIMESTAMP - INTERVAL '7 days')";
+        } else if (period === "month") {
+            dateFilter = " AND dt.created_at >= (CURRENT_TIMESTAMP - INTERVAL '30 days')";
+        } else if (period === "quarter") {
+            dateFilter = " AND dt.created_at >= (CURRENT_TIMESTAMP - INTERVAL '90 days')";
         }
 
-        let temp;
-        if (force_excursion === "HIGH") {
-            temp = (8.2 + Math.random() * 3.5).toFixed(1); // 8.2 - 11.7°C
-        } else if (force_excursion === "LOW") {
-            temp = (0.5 + Math.random() * 1.3).toFixed(1); // 0.5 - 1.8°C
-        } else {
-            // 90% cơ hội nhiệt độ bình thường (2.5°C - 5.8°C), 10% cơ hội vượt ngưỡng nhẹ
-            const rand = Math.random();
-            if (rand < 0.08) {
-                temp = (8.1 + Math.random() * 2.2).toFixed(1); // Cảnh báo vượt ngưỡng trên
-            } else if (rand < 0.12) {
-                temp = (1.1 + Math.random() * 0.8).toFixed(1); // Cảnh báo vượt ngưỡng dưới
-            } else {
-                temp = (2.8 + Math.random() * 4.2).toFixed(1); // Nhiệt độ tối ưu
-            }
-        }
+        // 1. Dữ liệu báo cáo tuân thủ từng kho (thiết bị cố định tại kho: vehicle_id IS NULL)
+        const warehouseQuery = `
+            SELECT 
+                w.id,
+                w.warehouse_name,
+                COUNT(DISTINCT d.id) AS sensor_count,
+                COUNT(dt.id) AS total_readings,
+                COUNT(CASE WHEN dt.temperature >= 2.0 AND dt.temperature <= 8.0 THEN 1 END) AS compliant_readings,
+                COUNT(CASE WHEN dt.temperature < 2.0 OR dt.temperature > 8.0 THEN 1 END) AS excursion_readings,
+                COALESCE(MIN(dt.temperature), 0) AS min_temp,
+                COALESCE(MAX(dt.temperature), 0) AS max_temp,
+                COALESCE(AVG(dt.temperature), 0) AS avg_temp
+            FROM warehouse w
+            LEFT JOIN device d ON (d.warehouse_id = w.id AND d.vehicle_id IS NULL)
+            LEFT JOIN data dt ON (dt.device_id = d.id ${dateFilter})
+            GROUP BY w.id, w.warehouse_name
+            ORDER BY w.id ASC
+        `;
 
-        const humidity = (68 + Math.random() * 16).toFixed(1); // 68 - 84% RH
+        // 2. Dữ liệu báo cáo tuân thủ từng xe (thiết bị gắn trên xe)
+        const vehicleQuery = `
+            SELECT 
+                v.id,
+                v.license_plate,
+                COUNT(DISTINCT d.id) AS sensor_count,
+                COUNT(dt.id) AS total_readings,
+                COUNT(CASE WHEN dt.temperature >= 2.0 AND dt.temperature <= 8.0 THEN 1 END) AS compliant_readings,
+                COUNT(CASE WHEN dt.temperature < 2.0 OR dt.temperature > 8.0 THEN 1 END) AS excursion_readings,
+                COALESCE(MIN(dt.temperature), 0) AS min_temp,
+                COALESCE(MAX(dt.temperature), 0) AS max_temp,
+                COALESCE(AVG(dt.temperature), 0) AS avg_temp
+            FROM delivery_vehicle v
+            LEFT JOIN device d ON d.vehicle_id = v.id
+            LEFT JOIN data dt ON (dt.device_id = d.id ${dateFilter})
+            GROUP BY v.id, v.license_plate
+            ORDER BY v.id ASC
+        `;
 
-        // Tạo bản ghi dữ liệu an toàn chống race condition
-        let record = null;
-        for (let attempt = 0; attempt < 5; attempt++) {
-            try {
-                const maxIdRes = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM data");
-                const nextId = Number(maxIdRes.rows[0].next_id) + attempt;
+        const [warehouseRes, vehicleRes] = await Promise.all([
+            pool.query(warehouseQuery),
+            pool.query(vehicleQuery)
+        ]);
 
-                const insertRes = await pool.query(`
-                    INSERT INTO data (id, device_id, temperature, humidity, created_at)
-                    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                    RETURNING *
-                `, [nextId, device_id, temp, humidity]);
-                record = insertRes.rows[0];
-                break;
-            } catch (err) {
-                if (err.code === "23505" && attempt < 4) {
-                    await new Promise(r => setTimeout(r, 40 * (attempt + 1)));
-                    continue;
-                }
-                throw err;
-            }
-        }
+        // Định dạng dữ liệu từng kho
+        const warehouses = warehouseRes.rows.map(w => {
+            const total = parseInt(w.total_readings, 10);
+            const compliant = parseInt(w.compliant_readings, 10);
+            const complianceRate = total > 0 
+                ? parseFloat(((compliant / total) * 100).toFixed(1)) 
+                : 100.0;
+            // So với 98%: nếu >= 98% gán COMPLIANT, thấp hơn gán REVIEW REQUIRED
+            const status = complianceRate >= 98.0 ? "COMPLIANT" : "REVIEW REQUIRED";
 
-        let alertGenerated = null;
+            return {
+                id: `WH-${w.id}`,
+                raw_id: w.id,
+                name: w.warehouse_name,
+                category: "Warehouse Storage",
+                isVehicle: false,
+                sensors: parseInt(w.sensor_count || 0, 10),
+                readings: total,
+                compliant_readings: compliant,
+                compliance: complianceRate,
+                minTemp: total > 0 ? parseFloat(parseFloat(w.min_temp).toFixed(1)) : 0.0,
+                maxTemp: total > 0 ? parseFloat(parseFloat(w.max_temp).toFixed(1)) : 0.0,
+                excursions: parseInt(w.excursion_readings || 0, 10),
+                mkt: total > 0 ? parseFloat(parseFloat(w.avg_temp).toFixed(1)) : 0.0,
+                status
+            };
+        });
 
-        const tempVal = parseFloat(temp);
-        if (tempVal < 2.0 || tempVal > 8.0) {
-            const isHigh = tempVal > 8.0;
-            const alertType = isHigh ? "NHIỆT ĐỘ QUÁ CAO" : "NHIỆT ĐỘ QUÁ THẤP";
-            const alertContent = `Mô phỏng IoT: Thiết bị #${device_id} ghi nhận ${tempVal}°C vượt ngưỡng an toàn chuỗi lạnh (2.0°C - 8.0°C).`;
+        // Định dạng dữ liệu từng xe
+        const vehicles = vehicleRes.rows.map(v => {
+            const total = parseInt(v.total_readings, 10);
+            const compliant = parseInt(v.compliant_readings, 10);
+            const complianceRate = total > 0 
+                ? parseFloat(((compliant / total) * 100).toFixed(1)) 
+                : 100.0;
+            // So với 98%: nếu >= 98% gán COMPLIANT, thấp hơn gán REVIEW REQUIRED
+            const status = complianceRate >= 98.0 ? "COMPLIANT" : "REVIEW REQUIRED";
 
-            for (let aAttempt = 0; aAttempt < 5; aAttempt++) {
-                try {
-                    const maxAlertId = await pool.query("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM alert");
-                    const alertRes = await pool.query(`
-                        INSERT INTO alert (id, device_id, alert_type, alert_content, created_at)
-                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                        RETURNING *
-                    `, [Number(maxAlertId.rows[0].next_id) + aAttempt, device_id, alertType, alertContent]);
-                    alertGenerated = alertRes.rows[0];
-                    break;
-                } catch (aErr) {
-                    if (aErr.code === "23505" && aAttempt < 4) {
-                        await new Promise(r => setTimeout(r, 40 * (aAttempt + 1)));
-                        continue;
-                    }
-                    throw aErr;
-                }
-            }
-        }
+            return {
+                id: `VEH-${v.id}`,
+                raw_id: v.id,
+                name: `Vehicle ${v.license_plate}`,
+                category: "Refrigerated Transit",
+                isVehicle: true,
+                sensors: parseInt(v.sensor_count || 0, 10),
+                readings: total,
+                compliant_readings: compliant,
+                compliance: complianceRate,
+                minTemp: total > 0 ? parseFloat(parseFloat(v.min_temp).toFixed(1)) : 0.0,
+                maxTemp: total > 0 ? parseFloat(parseFloat(v.max_temp).toFixed(1)) : 0.0,
+                excursions: parseInt(v.excursion_readings || 0, 10),
+                mkt: total > 0 ? parseFloat(parseFloat(v.avg_temp).toFixed(1)) : 0.0,
+                status
+            };
+        });
 
-        // Lấy thông tin thiết bị và vị trí gắn
-        const devInfo = await pool.query(`
-            SELECT d.id, d.device_token, w.warehouse_name, v.license_plate
-            FROM device d
-            LEFT JOIN warehouse w ON d.warehouse_id = w.id
-            LEFT JOIN delivery_vehicle v ON d.vehicle_id = v.id
-            WHERE d.id = $1
-        `, [device_id]);
+        const facilityAuditList = [...warehouses, ...vehicles];
 
-        return res.status(201).json({
+        // Thống kê tổng hợp toàn hệ thống (Executive KPIs)
+        const totalAllReadings = facilityAuditList.reduce((sum, r) => sum + r.readings, 0);
+        const totalCompliantReadings = facilityAuditList.reduce((sum, r) => sum + r.compliant_readings, 0);
+        const totalExcursions = facilityAuditList.reduce((sum, r) => sum + r.excursions, 0);
+        const overallComplianceRate = totalAllReadings > 0 
+            ? parseFloat(((totalCompliantReadings / totalAllReadings) * 100).toFixed(1)) 
+            : 100.0;
+
+        const activeEntities = facilityAuditList.filter(r => r.readings > 0);
+        const overallAvgTemp = activeEntities.length > 0 
+            ? parseFloat((activeEntities.reduce((sum, r) => sum + r.mkt, 0) / activeEntities.length).toFixed(1))
+            : 4.5;
+        const compliantAuditCount = facilityAuditList.filter(r => r.status === "COMPLIANT").length;
+
+        return res.json({
             success: true,
             data: {
-                ...record,
-                device: devInfo.rows[0] || null,
-                alertGenerated
+                overall: {
+                    complianceRate: overallComplianceRate,
+                    totalExcursions,
+                    avgTemp: overallAvgTemp,
+                    compliantAuditCount,
+                    totalFacilities: facilityAuditList.length
+                },
+                facilityAuditList,
+                warehouses,
+                vehicles
             },
-            message: alertGenerated 
-                ? `Mô phỏng dữ liệu thành công! ⚠️ Đã kích hoạt cảnh báo: ${alertGenerated.alert_type}` 
-                : "Mô phỏng dữ liệu telemetry IoT thành công (Trong ngưỡng an toàn)"
+            message: "Lấy báo cáo tuân thủ kho & xe thành công"
         });
     } catch (error) {
-        console.error("Data simulateTelemetry error:", error);
+        console.error("Reports getReportsData error:", error);
         return res.status(500).json({
             success: false,
             data: null,
-            message: "Lỗi máy chủ khi mô phỏng dữ liệu telemetry"
+            message: "Lỗi máy chủ khi lấy dữ liệu báo cáo"
         });
     }
 };
+
 

@@ -189,14 +189,14 @@ function populateVehicleDropdown() {
 async function loadTelemetryList() {
     try {
         const res = await api.get("/data", { limit: 100 });
-        if (res.success && res.data && Array.isArray(res.data.list) && res.data.list.length > 0) {
+        if (res.success && res.data && Array.isArray(res.data.list)) {
             allTelemetry = res.data.list.map(formatRawPacket);
         } else {
-            allTelemetry = generateFallbackTelemetry();
+            allTelemetry = [];
         }
     } catch (err) {
-        console.warn("Could not load telemetry list from server, using sample telemetry stream:", err);
-        allTelemetry = generateFallbackTelemetry();
+        console.warn("Could not load telemetry list from server:", err);
+        allTelemetry = [];
     }
 
     filteredTelemetry = [...allTelemetry];
@@ -262,26 +262,7 @@ function formatRawPacket(r) {
     };
 }
 
-/**
- * Realistic fallback stream data
- */
-function generateFallbackTelemetry() {
-    const list = [
-        { id: 892041, device_id: 4, device_token: "DEV-004", entity: "Vehicle 29A-12345", isVehicle: true, vehicle_id: 1, temperature: 10.8, humidity: 76, battery: "94%", rssi: "-68 dBm", latency: "14ms", created_at: "2026-09-24 10:42:15", status: "HIGH" },
-        { id: 892040, device_id: 7, device_token: "DEV-007", entity: "Vehicle 30H-88921", isVehicle: true, vehicle_id: 2, temperature: 4.6, humidity: 87, battery: "88%", rssi: "-72 dBm", latency: "18ms", created_at: "2026-09-24 10:42:10", status: "WARNING" },
-        { id: 892039, device_id: 1, device_token: "DEV-001", entity: "Warehouse: Hanoi WH-01 (Chamber A)", isVehicle: false, warehouse_id: 1, temperature: 3.8, humidity: 62, battery: "100%", rssi: "-54 dBm", latency: "8ms", created_at: "2026-09-24 10:42:04", status: "NORMAL" },
-        { id: 892038, device_id: 2, device_token: "DEV-002", entity: "Warehouse: Hanoi WH-01 (Chamber B)", isVehicle: false, warehouse_id: 1, temperature: 4.1, humidity: 64, battery: "100%", rssi: "-58 dBm", latency: "9ms", created_at: "2026-09-24 10:41:55", status: "NORMAL" },
-        { id: 892037, device_id: 3, device_token: "DEV-014", entity: "Warehouse: Hai Phong Port Facility", isVehicle: false, warehouse_id: 2, temperature: 2.3, humidity: 59, battery: "98%", rssi: "-62 dBm", latency: "12ms", created_at: "2026-09-24 10:41:40", status: "NORMAL" },
-        { id: 892036, device_id: 9, device_token: "DEV-009", entity: "Vehicle 51C-77412", isVehicle: true, vehicle_id: 3, temperature: 1.8, humidity: 68, battery: "91%", rssi: "-75 dBm", latency: "22ms", created_at: "2026-09-24 10:41:32", status: "LOW" },
-        { id: 892035, device_id: 2, device_token: "DEV-002", entity: "Warehouse: Hai Phong Port Facility", isVehicle: false, warehouse_id: 2, temperature: 4.5, humidity: 65, battery: "99%", rssi: "-59 dBm", latency: "11ms", created_at: "2026-09-24 10:41:15", status: "NORMAL" },
-        { id: 892034, device_id: 5, device_token: "DEV-005", entity: "Vehicle 29A-67890", isVehicle: true, vehicle_id: 2, temperature: 5.1, humidity: 71, battery: "95%", rssi: "-66 dBm", latency: "16ms", created_at: "2026-09-24 10:40:50", status: "NORMAL" },
-        { id: 892033, device_id: 6, device_token: "DEV-006", entity: "Warehouse: Da Nang Hub", isVehicle: false, warehouse_id: 3, temperature: 3.4, humidity: 66, battery: "97%", rssi: "-64 dBm", latency: "13ms", created_at: "2026-09-24 10:40:22", status: "NORMAL" },
-        { id: 892032, device_id: 8, device_token: "DEV-008", entity: "Vehicle 29A-12345", isVehicle: true, vehicle_id: 1, temperature: 4.8, humidity: 63, battery: "93%", rssi: "-70 dBm", latency: "17ms", created_at: "2026-09-24 10:39:55", status: "NORMAL" },
-        { id: 892031, device_id: 1, device_token: "DEV-001", entity: "Warehouse: Hanoi WH-01 (Chamber A)", isVehicle: false, warehouse_id: 1, temperature: 3.9, humidity: 61, battery: "100%", rssi: "-53 dBm", latency: "8ms", created_at: "2026-09-24 10:39:30", status: "NORMAL" },
-        { id: 892030, device_id: 4, device_token: "DEV-004", entity: "Vehicle 29A-12345", isVehicle: true, vehicle_id: 1, temperature: 9.8, humidity: 74, battery: "95%", rssi: "-69 dBm", latency: "15ms", created_at: "2026-09-24 10:39:10", status: "HIGH" }
-    ];
-    return list;
-}
+
 
 /**
  * Fetch summary statistics from /api/data/summary
@@ -625,78 +606,7 @@ function inspectTelemetryPacket(packetId) {
     }
 }
 
-/**
- * Simulate Modal Helpers
- */
-function openSimulateModal() {
-    const modal = document.getElementById("simulate-modal");
-    if (modal) modal.classList.add("show");
-}
 
-function closeSimulateModal() {
-    const modal = document.getElementById("simulate-modal");
-    if (modal) modal.classList.remove("show");
-}
-
-function setSimPreset(temp, hum) {
-    const tInput = document.getElementById("sim-temp-input");
-    const hInput = document.getElementById("sim-hum-input");
-    if (tInput) tInput.value = temp;
-    if (hInput) hInput.value = hum;
-}
-
-async function handleSimulateSubmit(e) {
-    e.preventDefault();
-    const devId = document.getElementById("sim-device-select").value;
-    const temp = parseFloat(document.getElementById("sim-temp-input").value);
-    const hum = parseFloat(document.getElementById("sim-hum-input").value);
-
-    const submitBtn = document.getElementById("btn-submit-simulate");
-    if (submitBtn) submitBtn.disabled = true;
-
-    try {
-        const payload = {
-            device_id: parseInt(devId, 10),
-            temperature: temp,
-            humidity: hum
-        };
-
-        const res = await api.post("/data", payload).catch(async () => {
-            return await api.post("/data/simulate", payload);
-        });
-
-        const newPacket = {
-            id: (res && res.data && res.data.id) ? res.data.id : Math.floor(893000 + Math.random() * 1000),
-            device_id: parseInt(devId, 10),
-            temperature: temp,
-            humidity: hum,
-            created_at: new Date().toISOString()
-        };
-
-        if (window.onTelemetryLiveUpdate) {
-            window.onTelemetryLiveUpdate(newPacket);
-        }
-
-        closeSimulateModal();
-        showToast(`Dispatched telemetry ping: ${temp}°C to Node #${devId}`, "success");
-    } catch (err) {
-        // Fallback local dispatch for instant UI test
-        const localPacket = {
-            id: Math.floor(893000 + Math.random() * 1000),
-            device_id: parseInt(devId, 10),
-            temperature: temp,
-            humidity: hum,
-            created_at: new Date().toISOString()
-        };
-        if (window.onTelemetryLiveUpdate) {
-            window.onTelemetryLiveUpdate(localPacket);
-        }
-        closeSimulateModal();
-        showToast(`Simulated telemetry dispatched: ${temp}°C`, "success");
-    } finally {
-        if (submitBtn) submitBtn.disabled = false;
-    }
-}
 
 /**
  * Manual Ingest Modal Helpers

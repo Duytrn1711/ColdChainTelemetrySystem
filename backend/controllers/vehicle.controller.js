@@ -92,29 +92,31 @@ exports.getVehicleById = async (req, res) => {
 
         const vehicle = vehicleRes.rows[0];
 
-        // Lấy thiết bị gán trên xe
+        // Lấy tất cả thiết bị gán trên xe
         const deviceRes = await pool.query(`
             SELECT id, device_token, status, created_at
             FROM device
             WHERE vehicle_id = $1
-            LIMIT 1
+            ORDER BY id ASC
         `, [id]);
 
         let telemetryHistory = [];
         let latestReading = null;
 
         if (deviceRes.rows.length > 0) {
-            const deviceId = deviceRes.rows[0].id;
             const historyRes = await pool.query(`
-                SELECT id, temperature, humidity, created_at
-                FROM data
-                WHERE device_id = $1
-                ORDER BY created_at DESC
-                LIMIT 20
-            `, [deviceId]);
-            telemetryHistory = historyRes.rows;
-            if (telemetryHistory.length > 0) {
-                latestReading = telemetryHistory[0];
+                SELECT dt.id, dt.device_id, d.device_token, dt.temperature, dt.humidity, dt.created_at
+                FROM data dt
+                JOIN device d ON dt.device_id = d.id
+                WHERE d.vehicle_id = $1
+                ORDER BY dt.created_at DESC
+                LIMIT 50
+            `, [id]);
+            const rowsDesc = historyRes.rows;
+            if (rowsDesc.length > 0) {
+                latestReading = rowsDesc[0];
+                // Sắp xếp tăng dần theo thời gian (cũ đến mới) cho biểu đồ chuỗi thời gian
+                telemetryHistory = [...rowsDesc].reverse();
             }
         }
 
@@ -123,8 +125,10 @@ exports.getVehicleById = async (req, res) => {
             data: {
                 ...vehicle,
                 device: deviceRes.rows[0] || null,
+                devices: deviceRes.rows,
                 latestReading,
-                telemetryHistory
+                telemetryHistory,
+                recentPings: telemetryHistory.slice().reverse()
             },
             message: "Lấy chi tiết xe tải thành công"
         });

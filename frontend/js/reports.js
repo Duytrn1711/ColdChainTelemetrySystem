@@ -28,125 +28,52 @@ function initReportDates() {
 }
 
 /**
- * Load data for reports dashboard
+ * Load data for reports dashboard from database
  */
-async function loadReportsData() {
+async function loadReportsData(period = null) {
     try {
-        const [sumRes, whRes, vehRes, dataRes] = await Promise.allSettled([
-            api.get("/data/summary"),
-            api.get("/warehouse"),
-            api.get("/vehicle"),
-            api.get("/data", { limit: 100 })
-        ]);
+        const periodSelect = document.getElementById("report-period-select");
+        const currentPeriod = period !== null ? period : (periodSelect ? periodSelect.value : "all");
+        
+        const res = await api.get("/data/reports", { period: currentPeriod });
 
-        if (sumRes.status === "fulfilled" && sumRes.value.success) {
-            summaryData = sumRes.value.data;
-            updateExecutiveKPIs(summaryData);
+        if (res && res.success && res.data) {
+            const reportData = res.data;
+            facilityAuditList = reportData.facilityAuditList || [];
+            updateExecutiveKPIs(reportData.overall);
+            renderFacilityAuditTable();
+            return;
         }
-
-        buildFacilityAuditRows(
-            whRes.status === "fulfilled" ? whRes.value.data : null,
-            vehRes.status === "fulfilled" ? vehRes.value.data : null,
-            dataRes.status === "fulfilled" ? dataRes.value.data : null
-        );
     } catch (err) {
-        console.warn("Could not load reports data:", err);
-        buildFallbackFacilityAudit();
+        console.error("Could not load reports data from /data/reports:", err);
     }
 }
 
 /**
  * Update top KPI cards
  */
-function updateExecutiveKPIs(data) {
-    if (!data) return;
+function updateExecutiveKPIs(overall) {
+    if (!overall) return;
 
-    if (data.compliance) {
-        const rateEl = document.getElementById("kpi-compliance-rate");
-        if (rateEl) rateEl.textContent = `${data.compliance.rate || 98.4}%`;
-
-        const excEl = document.getElementById("kpi-excursions-total");
-        if (excEl) {
-            const totalExc = (data.compliance.high_excursions || 0) + (data.compliance.low_excursions || 0);
-            excEl.textContent = totalExc > 0 ? totalExc : 4;
-        }
-
-        const mktEl = document.getElementById("kpi-mkt-value");
-        if (mktEl) {
-            const avg = data.compliance.avg_temp || "4.6";
-            mktEl.textContent = `+${parseFloat(avg).toFixed(1)}°C`;
-        }
+    const rateEl = document.getElementById("kpi-compliance-rate");
+    if (rateEl) {
+        rateEl.textContent = `${overall.complianceRate.toFixed(1)}%`;
     }
-}
 
-/**
- * Build performance audit records for all warehouses and vehicles
- */
-function buildFacilityAuditRows(warehouses, vehicles, telemetryData) {
-    const list = [];
+    const excEl = document.getElementById("kpi-excursions-total");
+    if (excEl) {
+        excEl.textContent = overall.totalExcursions !== undefined ? overall.totalExcursions : 0;
+    }
 
-    const whList = Array.isArray(warehouses) && warehouses.length > 0 ? warehouses : [
-        { id: 1, warehouse_name: "Hanoi Central Cold Storage", location: "Long Bien, Hanoi", capacity: 450 },
-        { id: 2, warehouse_name: "Hai Phong Port Cold Facility", location: "Dinh Vu, Hai Phong", capacity: 320 },
-        { id: 3, warehouse_name: "Da Nang Distribution Hub", location: "Hoa Khanh, Da Nang", capacity: 200 }
-    ];
+    const mktEl = document.getElementById("kpi-mkt-value");
+    if (mktEl) {
+        mktEl.textContent = `+${overall.avgTemp.toFixed(1)}°C`;
+    }
 
-    const vehList = Array.isArray(vehicles) && vehicles.length > 0 ? vehicles : [
-        { id: 1, license_plate: "29A-12345", driver_name: "Nguyen Van A", current_status: "IN_TRANSIT" },
-        { id: 2, license_plate: "29A-67890", driver_name: "Tran Van B", current_status: "IN_TRANSIT" },
-        { id: 3, license_plate: "51C-77412", driver_name: "Le Van C", current_status: "AVAILABLE" }
-    ];
-
-    // Warehouses
-    whList.forEach(w => {
-        list.push({
-            id: `WH-${w.id}`,
-            name: w.warehouse_name,
-            category: "Warehouse Storage",
-            isVehicle: false,
-            sensors: 4,
-            readings: 4320,
-            compliance: 99.4,
-            minTemp: 2.8,
-            maxTemp: 5.6,
-            excursions: 0,
-            mkt: 3.9,
-            status: "COMPLIANT"
-        });
-    });
-
-    // Vehicles
-    vehList.forEach((v, idx) => {
-        const hasExcursion = idx === 0; // 29A-12345 has excursion
-        list.push({
-            id: `VEH-${v.id}`,
-            name: `Vehicle ${v.license_plate}`,
-            category: "Refrigerated Transit",
-            isVehicle: true,
-            sensors: 2,
-            readings: 1440,
-            compliance: hasExcursion ? 94.2 : 98.8,
-            minTemp: hasExcursion ? 2.1 : 3.4,
-            maxTemp: hasExcursion ? 10.8 : 6.1,
-            excursions: hasExcursion ? 3 : 1,
-            mkt: hasExcursion ? 5.8 : 4.4,
-            status: hasExcursion ? "REVIEW REQUIRED" : "COMPLIANT"
-        });
-    });
-
-    facilityAuditList = list;
-    renderFacilityAuditTable();
-}
-
-function buildFallbackFacilityAudit() {
-    facilityAuditList = [
-        { id: "WH-1", name: "Hanoi Central Cold Storage", category: "Warehouse Storage", isVehicle: false, sensors: 5, readings: 4320, compliance: 99.6, minTemp: 2.8, maxTemp: 5.2, excursions: 0, mkt: 3.8, status: "COMPLIANT" },
-        { id: "WH-2", name: "Hai Phong Port Cold Facility", category: "Warehouse Storage", isVehicle: false, sensors: 4, readings: 3450, compliance: 99.1, minTemp: 2.4, maxTemp: 5.9, excursions: 0, mkt: 4.1, status: "COMPLIANT" },
-        { id: "WH-3", name: "Da Nang Distribution Hub", category: "Warehouse Storage", isVehicle: false, sensors: 3, readings: 2880, compliance: 98.7, minTemp: 3.1, maxTemp: 6.4, excursions: 1, mkt: 4.5, status: "COMPLIANT" },
-        { id: "VEH-1", name: "Vehicle 29A-12345", category: "Refrigerated Transit", isVehicle: true, sensors: 2, readings: 1440, compliance: 93.8, minTemp: 2.1, maxTemp: 10.8, excursions: 2, mkt: 5.9, status: "REVIEW REQUIRED" },
-        { id: "VEH-2", name: "Vehicle 29A-67890", category: "Refrigerated Transit", isVehicle: true, sensors: 2, readings: 1440, compliance: 98.4, minTemp: 3.2, maxTemp: 6.8, excursions: 1, mkt: 4.6, status: "COMPLIANT" }
-    ];
-    renderFacilityAuditTable();
+    const auditCountEl = document.getElementById("kpi-audit-count");
+    if (auditCountEl) {
+        auditCountEl.textContent = overall.compliantAuditCount !== undefined ? overall.compliantAuditCount : 0;
+    }
 }
 
 /**
@@ -156,9 +83,20 @@ function renderFacilityAuditTable() {
     const tbody = document.getElementById("facility-audit-tbody");
     if (!tbody) return;
 
+    if (!facilityAuditList || facilityAuditList.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" style="text-align:center; padding:36px; color:#94a3b8;">
+                    No cold chain telemetry records found in database for the selected period.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
     tbody.innerHTML = facilityAuditList.map(row => {
-        const isReview = row.status === "REVIEW REQUIRED";
-        const badgeClass = isReview ? "badge-critical" : "badge-online";
+        const isCompliant = row.status === "COMPLIANT";
+        const badgeClass = isCompliant ? "badge-online" : "badge-critical";
         const rateColor = row.compliance >= 98.0 ? "#10b981" : (row.compliance >= 95.0 ? "#f59e0b" : "#ef4444");
 
         return `
@@ -208,44 +146,34 @@ function renderFacilityAuditTable() {
 /**
  * Period Selector Change
  */
-function changeReportPeriod() {
+async function changeReportPeriod() {
     const period = document.getElementById("report-period-select").value;
-    showToast(`Loading cold chain analytics for period: ${period}...`, "info");
-
-    const rateEl = document.getElementById("kpi-compliance-rate");
-    const excEl = document.getElementById("kpi-excursions-total");
-
-    if (period === "today") {
-        if (rateEl) rateEl.textContent = "98.9%";
-        if (excEl) excEl.textContent = "1";
-    } else if (period === "week") {
-        if (rateEl) rateEl.textContent = "98.4%";
-        if (excEl) excEl.textContent = "4";
-    } else if (period === "month") {
-        if (rateEl) rateEl.textContent = "97.9%";
-        if (excEl) excEl.textContent = "12";
-    } else {
-        if (rateEl) rateEl.textContent = "98.2%";
-        if (excEl) excEl.textContent = "28";
-    }
+    showToast(`Loading database records for period: ${period}...`, "info");
+    await loadReportsData(period);
 }
 
 /**
  * Export table to CSV
  */
 function exportFacilityAuditReport() {
-    const headers = ["Entity Name", "Category", "Sensors", "Total Readings", "Compliance Rate (%)", "Min Temp (C)", "Max Temp (C)", "Excursions", "MKT (C)", "Audit Status"];
+    if (!facilityAuditList || facilityAuditList.length === 0) {
+        showToast("No compliance audit records found to export", "warning");
+        return;
+    }
+
+    const headers = ["Entity Name", "Category", "Sensors", "Total Readings", "Compliant Readings", "Compliance Rate (%)", "Min Temp (C)", "Max Temp (C)", "Excursions", "MKT (C)", "Audit Status"];
     const rows = facilityAuditList.map(r => [
         `"${r.name}"`,
-        r.category,
+        `"${r.category}"`,
         r.sensors,
         r.readings,
-        r.compliance,
-        r.minTemp,
-        r.maxTemp,
+        r.compliant_readings !== undefined ? r.compliant_readings : "",
+        r.compliance.toFixed(1),
+        r.minTemp.toFixed(1),
+        r.maxTemp.toFixed(1),
         r.excursions,
-        r.mkt,
-        r.status
+        r.mkt.toFixed(1),
+        `"${r.status}"`
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
@@ -270,27 +198,25 @@ function downloadReportDoc(docName, format) {
             showToast(`Generating print-ready PDF: ${docName}...`, "info");
         }
     } else if (format === "xlsx" || format === "csv") {
-        const dummyData = [
+        const item = facilityAuditList.find(r => r.name.replace(/\s+/g, '_') === docName.replace(/_Audit$/, "")) || facilityAuditList[0];
+        const rows = [
             ["Cold Chain Telemetry Management System - Official Audit Record"],
-            [`Document: ${docName}`, `Format: ${format.toUpperCase()}`, `Date: ${new Date().toISOString()}`],
-            ["Target Standard: WHO PQS & EU GDP Pharma Grade"],
-            ["Integrity Hash: SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"],
-            [],
-            ["ID", "Node", "Target", "Temperature", "Humidity", "Result"],
-            ["1", "DEV-001", "Hanoi WH-01", "3.8°C", "62%", "PASS"],
-            ["2", "DEV-002", "Hai Phong WH", "4.2°C", "65%", "PASS"],
-            ["3", "DEV-004", "Vehicle 29A-12345", "10.8°C", "76%", "EXCURSION (RESOLVED)"]
+            [`Entity: ${item ? item.name : docName}`, `Category: ${item ? item.category : ''}`, `Date: ${new Date().toISOString()}`],
+            ["Target Standard: WHO PQS & EU GDP Pharma Grade (2.0°C - 8.0°C)"],
+            [`Compliance Rate: ${item ? item.compliance.toFixed(1) + '%' : 'N/A'}`, `Audit Status: ${item ? item.status : 'N/A'}`],
+            [`Total Readings: ${item ? item.readings : 0}`, `Excursions: ${item ? item.excursions : 0}`, `MKT: +${item ? item.mkt.toFixed(1) + '°C' : ''}`],
+            [`Sensor Nodes: ${item ? item.sensors : 0}`, `Recorded Range: ${item ? item.minTemp.toFixed(1) + '°C to ' + item.maxTemp.toFixed(1) + '°C' : ''}`]
         ];
 
-        const csvContent = "data:text/csv;charset=utf-8," + dummyData.map(e => e.join(",")).join("\n");
+        const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
-        link.setAttribute("download", `${docName}_${new Date().toISOString().slice(0, 10)}.${format === "xlsx" ? "csv" : "csv"}`);
+        link.setAttribute("download", `${docName}_${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        showToast(`✓ Document downloaded: ${docName}.${format}`, "success");
+        showToast(`✓ Document downloaded: ${docName}.csv`, "success");
     }
 }
 

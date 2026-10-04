@@ -1,5 +1,6 @@
 /**
  * Delivery Vehicles JavaScript - Cold Chain Telemetry System
+ * Live Database Telemetry & Profile Chart Visualization
  */
 
 let allVehicles = [];
@@ -19,12 +20,13 @@ async function loadVehicles() {
             const countEl = document.getElementById("count-all-fleet");
             if (countEl) countEl.textContent = allVehicles.length;
 
+            updateFleetComplianceGrade();
             renderVehicleNodes(allVehicles);
 
-            // Select first vehicle or 29A-12345 by default
+            // Select active or first vehicle by default
             if (allVehicles.length > 0) {
-                const target = allVehicles.find(v => v.license_plate === "29A-12345") || allVehicles[0];
-                selectVehicle(target.id);
+                const target = selectedVehicleId ? (allVehicles.find(v => v.id == selectedVehicleId) || allVehicles[0]) : allVehicles[0];
+                await selectVehicle(target.id);
             }
         }
     } catch (error) {
@@ -33,25 +35,51 @@ async function loadVehicles() {
     }
 }
 
+function updateFleetComplianceGrade() {
+    const gradeEl = document.getElementById("v-fleet-compliance-grade");
+    if (!gradeEl) return;
+    if (allVehicles.length === 0) {
+        gradeEl.textContent = "--";
+        return;
+    }
+    const withTemp = allVehicles.filter(v => v.temperature !== null && v.temperature !== undefined);
+    if (withTemp.length === 0) {
+        gradeEl.textContent = "100%";
+        return;
+    }
+    const compliant = withTemp.filter(v => {
+        const t = parseFloat(v.temperature);
+        return t >= 2.0 && t <= 8.0;
+    });
+    const pct = ((compliant.length / withTemp.length) * 100).toFixed(1);
+    gradeEl.textContent = `${pct}%`;
+    gradeEl.style.color = pct >= 98 ? "#10b981" : "#ef4444";
+}
+
 function renderVehicleNodes(list) {
     const container = document.getElementById("fleet-nodes-list");
     if (!container) return;
 
     const renderedTag = document.getElementById("rendered-fleet-nodes-tag");
-    if (renderedTag) renderedTag.textContent = `${Math.min(list.length, 4)} OF ${allVehicles.length} RENDERED`;
+    if (renderedTag) renderedTag.textContent = `${list.length} OF ${allVehicles.length} UNITS`;
 
     if (list.length === 0) {
         container.innerHTML = `<div style="padding:30px; text-align:center; color:#94a3b8;">No matching vehicles found</div>`;
         return;
     }
 
-    container.innerHTML = list.slice(0, 8).map((veh, index) => {
+    container.innerHTML = list.map((veh) => {
         const isSelected = veh.id == selectedVehicleId;
-        const isExcursion = veh.license_plate === "29A-12345" || (veh.temperature && (veh.temperature > 8.0 || veh.temperature < 2.0));
-        const badgeClass = isExcursion ? "badge-critical" : "badge-online";
-        const tempText = isExcursion ? "10.8°C ALERT" : (veh.temperature ? `${veh.temperature}°C NORMAL` : "4.6°C NORMAL");
-        const subNote = isExcursion ? "Spike detected" : "Pharma Box 3.5T · Target: 2°C - 8°C";
-        const depot = veh.warehouse_name ? `${veh.warehouse_name} · 10s ago` : "Hanoi Central WH-01 · 10s ago";
+        const temp = veh.temperature !== null && veh.temperature !== undefined ? parseFloat(veh.temperature) : null;
+        const isExcursion = temp !== null && (temp > 8.0 || temp < 2.0);
+        const badgeClass = temp === null ? "badge-offline" : (isExcursion ? "badge-critical" : "badge-online");
+        const tempText = temp !== null 
+            ? `${temp.toFixed(1)}°C ${isExcursion ? 'ALERT' : 'NORMAL'}`
+            : "NO SENSOR";
+        const subNote = isExcursion 
+            ? (temp > 8.0 ? "High temp spike" : "Low freeze risk") 
+            : (temp !== null ? "Safe band · 2°C - 8°C" : "No device reading");
+        const depot = veh.warehouse_name ? veh.warehouse_name : "Central Depot";
 
         return `
             <div class="fleet-node-item ${isSelected ? 'active' : ''}" onclick="selectVehicle(${veh.id})">
@@ -79,58 +107,235 @@ async function selectVehicle(id) {
     const veh = allVehicles.find(v => v.id == id);
     if (!veh) return;
 
-    // Highlight node item
+    // Highlight node item in list
     renderVehicleNodes(allVehicles);
 
-    // Update Detail View
+    // Update Header basic info
     const plateEl = document.getElementById("v-detail-plate");
     if (plateEl) plateEl.textContent = `Vehicle ${veh.license_plate}`;
 
     const subtitleEl = document.getElementById("v-detail-subtitle");
     if (subtitleEl) {
-        subtitleEl.textContent = `Driver: Nguyen Van Binh · Assigned Depot: ${veh.warehouse_name || 'Hanoi Central WH-01'} · Unit: Carrier Transicold X4`;
+        subtitleEl.textContent = `Assigned Depot: ${veh.warehouse_name || 'Central Facility'} · Status: ${veh.status || 'ACTIVE'} · Unit: Cold Transport Reefer`;
     }
 
-    const isExcursion = veh.license_plate === "29A-12345";
-    const statusBadge = document.getElementById("v-detail-status-badge");
-    const tempStat = document.getElementById("v-stat-temp");
-    const humStat = document.getElementById("v-stat-hum");
-    const nodeStat = document.getElementById("v-stat-node");
+    try {
+        // Fetch real database vehicle detail & telemetry history
+        const res = await api.get(`/vehicles/${id}`);
+        if (!res.success || !res.data) {
+            showToast("Failed to load vehicle telemetry", "error");
+            return;
+        }
 
-    if (isExcursion) {
-        if (statusBadge) {
-            statusBadge.className = "badge badge-critical";
-            statusBadge.textContent = "In Transit - Alert Active";
+        const detail = res.data;
+        const device = detail.device;
+        const reading = detail.latestReading;
+        const history = detail.telemetryHistory || [];
+        const pings = detail.recentPings || history.slice().reverse();
+
+        // Update Stat Tiles
+        const tempTile = document.getElementById("v-stat-temp-tile");
+        const tempStat = document.getElementById("v-stat-temp");
+        const tempSub = document.getElementById("v-stat-temp-sub");
+        const humStat = document.getElementById("v-stat-hum");
+        const humSub = document.getElementById("v-stat-hum-sub");
+        const nodeStat = document.getElementById("v-stat-node");
+        const nodeSub = document.getElementById("v-stat-node-sub");
+        const statusBadge = document.getElementById("v-detail-status-badge");
+
+        if (reading && reading.temperature !== null) {
+            const tempVal = parseFloat(reading.temperature);
+            const humVal = reading.humidity !== null ? parseFloat(reading.humidity) : null;
+            const isHigh = tempVal > 8.0;
+            const isLow = tempVal < 2.0;
+
+            if (tempStat) tempStat.textContent = `${tempVal.toFixed(1)}°C`;
+            if (humStat) humStat.textContent = humVal !== null ? `${humVal.toFixed(1)}%` : "--%";
+            if (humSub) humSub.textContent = humVal && (humVal < 60 || humVal > 85) ? "Sub-optimal humidity" : "Safe (60-85%)";
+
+            if (isHigh) {
+                if (tempTile) {
+                    tempTile.style.borderColor = "#fecaca";
+                    tempTile.style.backgroundColor = "#fff1f2";
+                }
+                if (tempStat) tempStat.style.color = "#ef4444";
+                if (tempSub) {
+                    tempSub.style.color = "#b91c1c";
+                    tempSub.style.fontWeight = "600";
+                    tempSub.textContent = `↑ +${(tempVal - 8.0).toFixed(1)}°C over limit`;
+                }
+                if (statusBadge) {
+                    statusBadge.className = "badge badge-critical";
+                    statusBadge.style.background = "";
+                    statusBadge.style.color = "";
+                    statusBadge.textContent = "In Transit - High Alert";
+                }
+            } else if (isLow) {
+                if (tempTile) {
+                    tempTile.style.borderColor = "#bfdbfe";
+                    tempTile.style.backgroundColor = "#eff6ff";
+                }
+                if (tempStat) tempStat.style.color = "#2563eb";
+                if (tempSub) {
+                    tempSub.style.color = "#1d4ed8";
+                    tempSub.style.fontWeight = "600";
+                    tempSub.textContent = `↓ ${(2.0 - tempVal).toFixed(1)}°C under min`;
+                }
+                if (statusBadge) {
+                    statusBadge.className = "badge badge-critical";
+                    statusBadge.style.background = "#dbeafe";
+                    statusBadge.style.color = "#1d4ed8";
+                    statusBadge.textContent = "In Transit - Freeze Risk";
+                }
+            } else {
+                if (tempTile) {
+                    tempTile.style.borderColor = "#e2e8f0";
+                    tempTile.style.backgroundColor = "#f8fafc";
+                }
+                if (tempStat) tempStat.style.color = "#10b981";
+                if (tempSub) {
+                    tempSub.style.color = "#059669";
+                    tempSub.style.fontWeight = "600";
+                    tempSub.textContent = "✓ Safe Range (2°C - 8°C)";
+                }
+                if (statusBadge) {
+                    statusBadge.className = "badge badge-online";
+                    statusBadge.style.background = "";
+                    statusBadge.style.color = "";
+                    statusBadge.textContent = "In Transit - Normal";
+                }
+            }
+        } else {
+            if (tempTile) {
+                tempTile.style.borderColor = "#e2e8f0";
+                tempTile.style.backgroundColor = "#f8fafc";
+            }
+            if (tempStat) {
+                tempStat.textContent = "--";
+                tempStat.style.color = "#64748b";
+            }
+            if (tempSub) {
+                tempSub.textContent = "No data recorded";
+                tempSub.style.color = "#64748b";
+            }
+            if (humStat) humStat.textContent = "--";
+            if (statusBadge) {
+                statusBadge.className = "badge badge-offline";
+                statusBadge.textContent = "No Data";
+            }
         }
-        if (tempStat) tempStat.textContent = "10.8°C";
-        if (humStat) humStat.textContent = "76%";
-        if (nodeStat) nodeStat.textContent = "DEV-004";
-    } else {
-        if (statusBadge) {
-            statusBadge.className = "badge badge-online";
-            statusBadge.textContent = "In Transit - Normal";
+
+        if (nodeStat) nodeStat.textContent = device ? device.device_token : "N/A";
+        if (nodeSub) nodeSub.textContent = device ? `● ${device.status || 'ACTIVE'}` : "Not Assigned";
+
+        // Update Route info
+        const originTitle = document.getElementById("v-route-origin-title");
+        const originSub = document.getElementById("v-route-origin-sub");
+        const destTitle = document.getElementById("v-route-dest-title");
+        const destSub = document.getElementById("v-route-dest-sub");
+        const routeCode = document.getElementById("v-route-code-tag");
+
+        if (originTitle) originTitle.textContent = `Origin: ${detail.warehouse_name || 'Central Hub'}`;
+        if (originSub) originSub.textContent = `Depot ID #${detail.warehouse_id || '1'} · Active Gate`;
+        if (destTitle) destTitle.textContent = `Destination: Regional Distribution Point`;
+        if (destSub) destSub.textContent = `Cold Chain Monitored Run`;
+        if (routeCode) routeCode.textContent = `Route #TR-${detail.id.toString().padStart(3, '0')}`;
+
+        // Update Chart Subtitle
+        const chartTitle = document.getElementById("v-chart-title");
+        const chartSubtitle = document.getElementById("v-chart-subtitle");
+        if (chartTitle) chartTitle.textContent = `Vehicle ${detail.license_plate} - Temperature Profile`;
+
+        if (history.length > 0) {
+            const temps = history.map(h => parseFloat(h.temperature));
+            const minT = Math.min(...temps);
+            const maxT = Math.max(...temps);
+            const breaches = history.filter(h => {
+                const t = parseFloat(h.temperature);
+                return t < 2.0 || t > 8.0;
+            });
+
+            if (breaches.length > 0) {
+                if (chartSubtitle) {
+                    chartSubtitle.innerHTML = `<span style="color:#ef4444; font-weight:600;">⚠️ ${breaches.length} excursion point(s) detected!</span> Min: ${minT.toFixed(1)}°C · Max: ${maxT.toFixed(1)}°C (${history.length} database readings)`;
+                }
+            } else {
+                if (chartSubtitle) {
+                    chartSubtitle.innerHTML = `<span style="color:#10b981; font-weight:600;">✓ All readings compliant</span> Min: ${minT.toFixed(1)}°C · Max: ${maxT.toFixed(1)}°C (${history.length} database readings)`;
+                }
+            }
+        } else {
+            if (chartSubtitle) {
+                chartSubtitle.textContent = "No telemetry points found in database for this vehicle.";
+            }
         }
-        if (tempStat) tempStat.textContent = veh.temperature ? `${veh.temperature}°C` : "4.6°C";
-        if (humStat) humStat.textContent = veh.humidity ? `${veh.humidity}%` : "74%";
-        if (nodeStat) nodeStat.textContent = veh.device_token || "DEV-007";
+
+        // Render Database Telemetry Chart
+        renderVehicleProfileChart(detail.license_plate, history);
+
+        // Render Telemetry Ping History Table
+        renderPingHistoryTable(pings, device);
+
+    } catch (err) {
+        console.error("Error in selectVehicle:", err);
+        showToast("Error retrieving vehicle telemetry: " + err.message, "error");
     }
-
-    // Render / Update Chart
-    renderVehicleProfileChart(isExcursion);
 }
 
-function renderVehicleProfileChart(hasExcursion = true) {
+function renderVehicleProfileChart(plate, history = []) {
     const ctx = document.getElementById("vehicleProfileChart");
     if (!ctx) return;
 
     if (vehicleProfileChart) {
         vehicleProfileChart.destroy();
+        vehicleProfileChart = null;
     }
 
-    const labels = ["07:00", "08:00", "09:00", "10:00", "10:30", "10:42"];
-    const normalData = [4.5, 4.8, 4.6, 4.4, 4.5, 4.6];
-    const excursionData = [4.5, 4.7, 4.9, 4.6, 6.2, 10.8];
-    const currentData = hasExcursion ? excursionData : normalData;
+    if (!history || history.length === 0) {
+        vehicleProfileChart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: ["No Data"],
+                datasets: [{
+                    label: "Reefer Temperature (°C)",
+                    data: [0],
+                    borderColor: "#cbd5e1",
+                    borderDash: [5, 5],
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                },
+                scales: {
+                    y: { min: 0, max: 10 }
+                }
+            }
+        });
+        return;
+    }
+
+    // Format labels: HH:mm
+    const labels = history.map((item, idx) => {
+        const d = new Date(item.created_at);
+        if (isNaN(d.getTime())) return `P${idx + 1}`;
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        return `${h}:${m}`;
+    });
+
+    const temps = history.map(item => parseFloat(item.temperature));
+    const hasBreach = temps.some(t => t > 8.0 || t < 2.0);
+
+    // Calculate dynamic Y-axis min/max to fit database values accurately
+    const minVal = Math.min(...temps, 2.0);
+    const maxVal = Math.max(...temps, 8.0);
+    const yMin = Math.floor(Math.min(minVal - 2, 0));
+    const yMax = Math.ceil(Math.max(maxVal + 2, 10));
 
     vehicleProfileChart = new Chart(ctx, {
         type: "line",
@@ -138,23 +343,26 @@ function renderVehicleProfileChart(hasExcursion = true) {
             labels: labels,
             datasets: [
                 {
-                    label: "Reefer Temperature",
-                    data: currentData,
-                    borderColor: hasExcursion ? "#ef4444" : "#2563eb",
-                    backgroundColor: "rgba(37, 99, 235, 0.05)",
+                    label: "Reefer Temperature (°C)",
+                    data: temps,
+                    borderColor: hasBreach ? "#ef4444" : "#2563eb",
+                    backgroundColor: hasBreach ? "rgba(239, 68, 68, 0.08)" : "rgba(37, 99, 235, 0.08)",
                     borderWidth: 2.5,
-                    tension: 0.35,
-                    fill: false,
+                    tension: 0.3,
+                    fill: true,
                     pointBackgroundColor: (context) => {
                         const val = context.raw;
-                        return val > 8.0 ? "#ef4444" : "#2563eb";
+                        if (val > 8.0) return "#ef4444"; // red for high breach
+                        if (val < 2.0) return "#3b82f6"; // blue for freezing breach
+                        return "#10b981"; // green for safe 2-8°C
                     },
                     pointBorderColor: "#ffffff",
                     pointBorderWidth: 2,
                     pointRadius: (context) => {
                         const val = context.raw;
-                        return val > 8.0 ? 7 : 4;
-                    }
+                        return (val > 8.0 || val < 2.0) ? 6 : 4;
+                    },
+                    pointHoverRadius: 7
                 }
             ]
         },
@@ -167,7 +375,21 @@ function renderVehicleProfileChart(hasExcursion = true) {
                     backgroundColor: "#0f172a",
                     padding: 10,
                     callbacks: {
-                        label: (ctx) => `Temp: ${ctx.parsed.y}°C ${ctx.parsed.y > 8.0 ? '(Thermal Excursion Peak)' : ''}`
+                        label: (ctx) => {
+                            const val = ctx.parsed.y;
+                            let note = "";
+                            if (val > 8.0) note = " ⚠️ (Thermal Excursion High)";
+                            else if (val < 2.0) note = " ❄️ (Freezing Excursion Low)";
+                            else note = " ✓ (Safe Band: 2°C - 8°C)";
+                            return ` Temp: ${val.toFixed(2)}°C${note}`;
+                        },
+                        afterLabel: (ctx) => {
+                            const item = history[ctx.dataIndex];
+                            if (item && item.humidity !== null && item.humidity !== undefined) {
+                                return ` Humidity: ${parseFloat(item.humidity).toFixed(1)}%`;
+                            }
+                            return "";
+                        }
                     }
                 }
             },
@@ -177,20 +399,70 @@ function renderVehicleProfileChart(hasExcursion = true) {
                     ticks: { color: "#64748b", font: { size: 11 } }
                 },
                 y: {
-                    min: 0,
-                    max: 13,
+                    min: yMin,
+                    max: yMax,
                     ticks: {
-                        stepSize: 2,
+                        stepSize: yMax - yMin > 20 ? 4 : 2,
                         color: "#64748b",
                         callback: (v) => `${v}°C`
                     },
                     grid: {
-                        color: (c) => (c.tick.value === 2 || c.tick.value === 8 ? "rgba(37,99,235,0.25)" : "rgba(226,232,240,0.6)")
+                        color: (c) => (c.tick.value === 2 || c.tick.value === 8 ? "rgba(37,99,235,0.35)" : "rgba(226,232,240,0.6)"),
+                        lineWidth: (c) => (c.tick.value === 2 || c.tick.value === 8 ? 2 : 1)
                     }
                 }
             }
         }
     });
+}
+
+function renderPingHistoryTable(pings = [], device = null) {
+    const tbody = document.getElementById("v-ping-history-tbody");
+    if (!tbody) return;
+
+    const nodeTag = document.getElementById("v-history-node-tag");
+    if (nodeTag) {
+        nodeTag.textContent = device ? `Device: ${device.device_token}` : "Device: Unassigned";
+    }
+
+    const countTag = document.getElementById("v-ping-count-tag");
+    if (countTag) {
+        countTag.textContent = `Showing last ${pings.length} sensor heartbeats from database`;
+    }
+
+    if (!pings || pings.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">No telemetry history logged</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = pings.map(ping => {
+        const temp = parseFloat(ping.temperature);
+        const hum = ping.humidity !== null ? parseFloat(ping.humidity) : null;
+        const d = new Date(ping.created_at);
+        const timeStr = isNaN(d.getTime()) ? (ping.created_at || "--") : d.toLocaleTimeString();
+
+        let tempClass = "temp-safe";
+        let statusBadge = `<span class="badge badge-active">NOM</span>`;
+        if (temp > 8.0) {
+            tempClass = "temp-danger";
+            statusBadge = `<span class="badge badge-critical">HIGH</span>`;
+        } else if (temp < 2.0) {
+            tempClass = "temp-danger";
+            statusBadge = `<span class="badge badge-critical" style="background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe;">LOW</span>`;
+        }
+
+        const devToken = ping.device_token || (device ? device.device_token : "DEV-NODE");
+
+        return `
+            <tr>
+                <td style="${temp > 8.0 || temp < 2.0 ? 'color:#ef4444; font-weight:600;' : ''}">${timeStr}</td>
+                <td><span class="temp-display ${tempClass}">${temp.toFixed(2)}°C</span></td>
+                <td>${hum !== null ? hum.toFixed(1) + '%' : '--'}</td>
+                <td class="cell-code">${devToken}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    }).join("");
 }
 
 function initVehicleFilters() {
@@ -210,7 +482,11 @@ function initVehicleFilters() {
             } else if (filter === "IDLE") {
                 renderVehicleNodes(allVehicles.filter(v => v.status !== "ACTIVE"));
             } else if (filter === "WARNING") {
-                renderVehicleNodes(allVehicles.filter(v => v.license_plate === "29A-12345"));
+                renderVehicleNodes(allVehicles.filter(v => {
+                    if (v.temperature === null || v.temperature === undefined) return false;
+                    const t = parseFloat(v.temperature);
+                    return t < 2.0 || t > 8.0;
+                }));
             }
         });
     });
@@ -375,4 +651,3 @@ window.confirmDeleteVehicle = async function(id) {
         showToast(err.message || "Server error while deleting vehicle", "error");
     }
 };
-
